@@ -203,11 +203,11 @@ class Game {
     }
     if (CFG.grain > 0) {
       ctx.save();
-      ctx.globalAlpha = Math.min(1, CFG.grain * 6);
-      const ox = U.hash(Clay.boil * 3) * 160, oy = U.hash(Clay.boil * 7 + 1) * 160;
+      ctx.globalAlpha = Math.min(1, CFG.grain * 5);
+      const ox = U.hash(Clay.boil * 3) * 192, oy = U.hash(Clay.boil * 7 + 1) * 192;
       ctx.translate(-ox, -oy);
-      ctx.fillStyle = Clay.grainPattern(ctx);
-      ctx.fillRect(0, 0, VIEW_W + 160, VIEW_H + 160);
+      ctx.fillStyle = Clay.grainPattern(ctx, true);
+      ctx.fillRect(0, 0, VIEW_W + 192, VIEW_H + 192);
       ctx.restore();
     }
   }

@@ -13,7 +13,7 @@ const THEMES = {
     distantFade: '#f7d6e3',
     mid: '#fff7fb', midShade: '#ecd0e6',
     grass: '#7fcf6a', dirt: '#cf9363', rock: '#a66f62', stone: '#b9adc0',
-    cloud: '#ffffff', cloudShade: '#ddd2f2', thorn: '#7d4a8a',
+    cloud: '#ffffff', cloudShade: '#cbb9ee', cloudRim: '#8f72b8', thorn: '#7d4a8a',
     flowers: ['#ff6f91', '#ffd166', '#c77dff', '#ffffff', '#ff9f6b'], leaf: '#6cc25a', trunk: '#8a5a3c',
     sea: '#fff5fa', seaShade: '#edd2e5',
     ambient: 'pollen',
@@ -26,7 +26,7 @@ const THEMES = {
     distantFade: '#cfe9ff',
     mid: '#ffffff', midShade: '#c9e0f5',
     grass: '#5ec24e', dirt: '#c27c4b', rock: '#8f6750', stone: '#b6b2bf',
-    cloud: '#ffffff', cloudShade: '#c8dcf2', thorn: '#6a3f86',
+    cloud: '#ffffff', cloudShade: '#b9d0ef', cloudRim: '#5f86b8', thorn: '#6a3f86',
     flowers: ['#ff5d73', '#ffe066', '#ffffff', '#6ec6ff', '#ff9f43'], leaf: '#4fb646', trunk: '#875636',
     sea: '#ffffff', seaShade: '#cfe2f5',
     ambient: 'leaves',
@@ -40,7 +40,7 @@ const THEMES = {
     distantFade: '#9a7aa8',
     mid: '#d9cdef', midShade: '#9b8cc2',
     grass: '#6db39a', dirt: '#917a98', rock: '#665676', stone: '#8f8ba8',
-    cloud: '#f1e9ff', cloudShade: '#a99dcc', thorn: '#4b2a5c',
+    cloud: '#f1e9ff', cloudShade: '#a99dcc', cloudRim: '#4e3f78', thorn: '#4b2a5c',
     flowers: ['#ffb3c7', '#ffe9a8', '#b9f2ff', '#f0c3ff'], leaf: '#5b9d8a', trunk: '#5e4560',
     sea: '#d8cdee', seaShade: '#9b8dc1',
     ambient: 'rain',
@@ -55,7 +55,7 @@ const THEMES = {
     distantFade: '#ffe6ef',
     mid: '#ffffff', midShade: '#f0d6ea',
     grass: '#8fd0ff', dirt: '#e4c07a', rock: '#c7a066', stone: '#f0e2c4',
-    cloud: '#ffffff', cloudShade: '#ead6f2', thorn: '#7d4a8a',
+    cloud: '#ffffff', cloudShade: '#e2c6ee', cloudRim: '#a879b8', thorn: '#7d4a8a',
     flowers: ['#ff8fb1', '#ffffff', '#ffe066'], leaf: '#7cc8f0', trunk: '#b58a52',
     sea: '#fffaff', seaShade: '#f0d6ea',
     ambient: 'sparkle',
@@ -238,7 +238,7 @@ function buildTerrainGeom(level) {
   }
   // a signpost next to the start
   if (level.start) {
-    const sx = Math.floor(level.start.x / T) + 2, sy = Math.floor((level.start.y + 40) / T);
+    const sx = Math.floor(level.start.x / T) + 2, sy = Math.floor(level.start.y / T);
     for (let yy = sy; yy < h; yy++) {
       if (isG(sx, yy)) {
         decor.push({ type: 'sign', x: sx * T + 16, y: yy * T, size: 1, seed: 5 });
@@ -508,7 +508,7 @@ class TerrainRenderer {
           while (rs > 0 && grid[ty][rs - 1] === '=') rs--;
           let re = tx - 1;
           while (re < this.level.w - 1 && grid[ty][re + 1] === '=') re++;
-          Clay.cloud(ctx, rs * T - 4, ty * T - 4, (re - rs + 1) * T + 8, 28, th.cloud, th.cloudShade, rs * 31 + ty);
+          Clay.cloud(ctx, rs * T - 4, ty * T - 4, (re - rs + 1) * T + 8, 28, th.cloud, th.cloudShade, rs * 31 + ty, { outline: th.cloudRim });
           tx = re + 1;
           continue;
         }
@@ -714,12 +714,13 @@ class Backdrop {
     // far clouds
     {
       const [c, g] = mk(LW, VIEW_H);
-      g.globalAlpha = 0.85;
+      g.globalAlpha = 0.55;
+      const farC = U.mix(th.far, th.sky[1], 0.3), farS = U.mix(th.farShade, th.sky[1], 0.45);
       for (let i = 0; i < 9; i++) {
-        const w = 160 + rnd() * 220;
+        const w = 130 + rnd() * 170;
         const x = (i / 9) * LW + rnd() * 60;
-        const y = 70 + rnd() * 200;
-        for (const ox of [0, -LW, LW]) Clay.cloud(g, x + ox, y, w, w * 0.32, th.far, th.farShade, 400 + i);
+        const y = 60 + rnd() * 200;
+        for (const ox of [0, -LW, LW]) Clay.cloud(g, x + ox, y, w, w * 0.3, farC, farS, 400 + i);
       }
       this.farLayer = c;
     }
@@ -759,7 +760,9 @@ class Backdrop {
         const w = 200 + rnd() * 160;
         const x = (i / 8) * LW + rnd() * 80;
         const y = 330 + rnd() * 110;
-        for (const ox of [0, -LW, LW]) Clay.cloud(g, x + ox, y, w, w * 0.3, th.mid, th.midShade, 700 + i);
+        g.globalAlpha = 0.8;
+        for (const ox of [0, -LW, LW]) Clay.cloud(g, x + ox, y, w, w * 0.3, U.mix(th.mid, th.sky[2], 0.25), U.mix(th.midShade, th.sky[2], 0.3), 700 + i);
+        g.globalAlpha = 1;
       }
       this.midLayer = c;
     }

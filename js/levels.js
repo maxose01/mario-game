@@ -188,8 +188,9 @@ const LEVEL_SPECS = {
       g.put(72, 13, 'I');
       g.put(74, 13, 'E');
       g.put(78, 16, 's');
+      g.cloud(76, 14, 2);
       g.row(80, 12, 'B?BB?B');
-      g.put(86, 9, '$');
+      g.put(83, 8, '$');
       g.put(83, 16, 's');
       g.put(88, 16, 'C');
       g.put(92, 16, 'k');
@@ -300,6 +301,7 @@ const LEVEL_SPECS = {
       g.put(149, 11, 'o');
       g.fill(155, 14, 3, 10, 'X');
       g.put(157, 13, 'Z');
+      g.put(155, 10, '$');
       g.put(160, 15, 'n');
       g.put(165, 16, 'm');
       // final approach and the boss arena

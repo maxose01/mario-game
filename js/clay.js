@@ -31,6 +31,7 @@ const Clay = {
       this._sin[i] = Math.sin((i / n) * TAU);
     }
     this.grainCanvas = this.makeGrain(160);
+    this.filmCanvas = this.makeFilmGrain(192);
     this.shadowCanvas = this.makeShadow();
   },
 
@@ -186,6 +187,21 @@ const Clay = {
     }
     return c;
   },
+  // Fine, blotch-free noise for the full-screen film grain.
+  makeFilmGrain(size) {
+    const c = this.makeCanvas(size, size);
+    const g = c.getContext('2d');
+    const img = g.createImageData(size, size);
+    const d = img.data;
+    const rnd = U.rng(98765);
+    for (let i = 0; i < size * size; i++) {
+      const v = rnd() < 0.5 ? 0 : 255;
+      d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = v;
+      d[i * 4 + 3] = rnd() * 34;
+    }
+    g.putImageData(img, 0, 0);
+    return c;
+  },
   makeShadow() {
     const c = this.makeCanvas(64, 16);
     const g = c.getContext('2d');
@@ -198,13 +214,13 @@ const Clay = {
     g.fillRect(0, -24, 64, 64);
     return c;
   },
-  grainPattern(ctx) {
+  grainPattern(ctx, film) {
     let p = this._patterns.get(ctx);
     if (!p) {
-      p = ctx.createPattern(this.grainCanvas, 'repeat');
+      p = { clay: ctx.createPattern(this.grainCanvas, 'repeat'), film: ctx.createPattern(this.filmCanvas, 'repeat') };
       this._patterns.set(ctx, p);
     }
-    return p;
+    return film ? p.film : p.clay;
   },
   // Dusts grain onto everything already drawn inside the rect.
   applyGrain(ctx, x, y, w, h, alpha = 1) {
@@ -273,7 +289,8 @@ const Clay = {
 
   // ---------- scenery ----------
   // A row of clay cloud puffs filling (x, y, w, h).
-  cloud(ctx, x, y, w, h, base, shadeCol, seed) {
+  // opts.outline: a color for a soft rim that lifts gameplay clouds off the backdrop.
+  cloud(ctx, x, y, w, h, base, shadeCol, seed, opts) {
     const rnd = U.rng(seed);
     const n = Math.max(2, Math.round(w / (h * 0.9)));
     const puffs = [];
@@ -281,6 +298,15 @@ const Clay = {
       const t = (i + 0.5) / n;
       const r = h * (0.42 + rnd() * 0.2);
       puffs.push([x + t * w, y + h * 0.55 - Math.sin(t * Math.PI) * h * 0.1, r, seed * 13 + i]);
+    }
+    if (opts && opts.outline) {
+      ctx.fillStyle = opts.outline;
+      for (const [px, py, r, s] of puffs) {
+        this.blobPath(ctx, px + 1, py + h * 0.1, r + 2.2, r * 0.88 + 2.2, s, 0.09);
+        ctx.fill();
+      }
+      this.rrect(ctx, x - 2.2, y + h * 0.42 - 2.2, w + 4.4, h * 0.58 + 4.4, h * 0.3);
+      ctx.fill();
     }
     ctx.fillStyle = shadeCol;
     for (const [px, py, r, s] of puffs) {

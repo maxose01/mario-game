@@ -1299,7 +1299,7 @@ class MovingPlatform extends Entity {
   }
   draw(ctx) {
     const th = this.level.theme;
-    Clay.cloud(ctx, this.x - 4, this.y - 6, this.w + 8, 28, th.cloud, th.cloudShade, 51);
+    Clay.cloud(ctx, this.x - 4, this.y - 6, this.w + 8, 28, th.cloud, th.cloudShade, 51, { outline: th.cloudRim });
     const cx = this.cx, cy = this.y + 9;
     ctx.strokeStyle = '#6a5a7a';
     ctx.lineWidth = 1.8;
