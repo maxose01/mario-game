@@ -86,7 +86,7 @@ class Enemy extends Entity {
     if (this.y > this.level.H + 64) this.dead = true;
     return res;
   }
-  knockOut(dir, silent) {
+  knockOut(dir, silent, noScore) {
     if (this.ko || this.dead) return;
     this.ko = true;
     this.inert = true;
@@ -95,17 +95,17 @@ class Enemy extends Entity {
     this.vx = (dir || 1) * 1.6;
     this.alwaysActive = true;
     this.layer = 4;
-    this.level.addScore(this.score, this.cx, this.y);
+    if (!noScore) this.level.addScore(this.score, this.cx, this.y);
     if (!silent) Sound.play('kick');
   }
-  poof() {
+  poof(noScore) {
     this.dead = true;
     this.level.puff(this.cx, this.cy, 1.3);
-    this.level.addScore(this.score, this.cx, this.y);
+    if (!noScore) this.level.addScore(this.score, this.cx, this.y);
     Sound.play('stomp');
   }
   stomp(player, spin) {
-    if (spin) this.poof();
+    if (spin) this.poof(true);
     else this.squish();
   }
   squish() {
@@ -315,7 +315,7 @@ class Snail extends Enemy {
     this.level.puff(this.cx - dir * 10, this.y + this.h - 4, 0.5);
   }
   stomp(player, spin) {
-    if (spin) return this.poof();
+    if (spin) return this.poof(true);
     if (this.state === 'shell') this.kick(player.cx < this.cx ? 1 : -1);
     else {
       this.setState('shell');
@@ -404,7 +404,7 @@ class Thornbun extends Enemy {
     this.walk(CFG.enemySpeed * 0.9);
   }
   stomp(player, spin) {
-    this.poof();
+    this.poof(true);
   }
   draw(ctx) {
     const cx = this.cx, by = this.y + this.h, d = this.dir;
@@ -458,9 +458,9 @@ class Flapper extends Enemy {
     this.y = ny;
   }
   stomp(player, spin) {
-    if (spin) return this.poof();
+    if (spin) return this.poof(true);
     Sound.play('stomp');
-    this.knockOut(player.facing, true);
+    this.knockOut(player.facing, true, true);
   }
   draw(ctx) {
     const cx = this.cx, cy = this.cy, d = this.dir;
@@ -510,7 +510,7 @@ class Pellet extends Enemy {
   }
   stomp(player, spin) {
     Sound.play('stomp');
-    this.knockOut(player.facing, true);
+    this.knockOut(player.facing, true, true);
   }
   draw(ctx) {
     const cx = this.cx, cy = this.cy, d = this.dir;
@@ -1285,7 +1285,7 @@ class MovingPlatform extends Entity {
     this.t = 0;
     this.dx = 0;
     this.dy = 0;
-    this.platform = true;
+    this.isPlatform = true;
     this.alwaysActive = true;
     this.layer = 0;
   }
@@ -1320,7 +1320,7 @@ class MovingPlatform extends Entity {
 class BigSwitch extends Entity {
   constructor(level, tx, ty) {
     super(level, tx * TILE - 16, ty * TILE + TILE - 30, 64, 30);
-    this.platform = true;
+    this.isPlatform = true;
     this.dx = 0;
     this.dy = 0;
     this.pressed = false;
