@@ -729,7 +729,7 @@ class Companion extends Entity {
     this.alwaysActive = true;
     this.tongue = 0;
     this.tongueDir = 0;
-    this.caught = null;
+    this.prey = null;
     this.mouth = null;
     this.cool = 0;
     this.legT = 0;
@@ -788,9 +788,9 @@ class Companion extends Entity {
     this.cancelTongue();
   }
   cancelTongue() {
-    if (this.caught) {
-      this.caught.caught = false;
-      this.caught = null;
+    if (this.prey) {
+      this.prey.caught = false;
+      this.prey = null;
     }
     this.tongue = 0;
     this.tongueDir = 0;
@@ -832,15 +832,15 @@ class Companion extends Entity {
       } else this.checkTongue();
     } else {
       this.tongue -= sp * 1.25;
-      if (this.caught) {
+      if (this.prey) {
         const t = this.tip();
-        this.caught.x = t.x + t.w / 2 - this.caught.w / 2;
-        this.caught.y = t.y + t.h / 2 - this.caught.h / 2;
+        this.prey.x = t.x + t.w / 2 - this.prey.w / 2;
+        this.prey.y = t.y + t.h / 2 - this.prey.h / 2;
       }
       if (this.tongue <= 0) {
         this.tongue = 0;
         this.tongueDir = 0;
-        if (this.caught) this.swallow();
+        if (this.prey) this.swallow();
       }
     }
   }
@@ -849,7 +849,7 @@ class Companion extends Entity {
     for (const e of this.level.entities) {
       if (e.dead || e === this || !e.active || !U.overlap(t, e)) continue;
       if (e.enemy && e.edible && !e.ko && !e.inert && !e.boss && !(e instanceof Snail && e.state === 'carried')) {
-        this.caught = e;
+        this.prey = e;
         e.caught = true;
         this.tongueDir = -1;
         return;
@@ -861,8 +861,8 @@ class Companion extends Entity {
     }
   }
   swallow() {
-    const e = this.caught;
-    this.caught = null;
+    const e = this.prey;
+    this.prey = null;
     e.dead = true;
     if (e instanceof Snail) {
       this.mouth = 'shell';
