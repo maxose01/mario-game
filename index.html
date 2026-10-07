@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Super Clay Isles</title>
+    <meta name="description" content="A claymation side-scroller across floating cloud islands: run, glide with a cape, ride Dumpling the clay dino and hunt keys for secret exits." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@500;700;800&display=swap" />
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header id="topbar">
+        <h1 class="wordmark">Super <span>Clay</span> Isles</h1>
+        <nav class="bar-actions" aria-label="Game options">
+          <button id="muteBtn" type="button" aria-pressed="true" title="Toggle sound (M)">Sound on</button>
+          <button id="fullBtn" type="button" title="Fullscreen">Fullscreen</button>
+          <button id="editToggle" type="button" class="primary" aria-expanded="false" aria-controls="editPanel" title="Open the Edit Panel (Tab)">Edit Panel</button>
+        </nav>
+      </header>
+
+      <div id="main">
+        <div id="stage">
+          <canvas id="game" width="960" height="540" tabindex="0" aria-label="Super Clay Isles game screen"></canvas>
+          <div id="touch" hidden>
+            <div class="dpad">
+              <button type="button" data-act="up" aria-label="Up">▲</button>
+              <button type="button" data-act="left" aria-label="Left">◀</button>
+              <button type="button" data-act="right" aria-label="Right">▶</button>
+              <button type="button" data-act="down" aria-label="Down">▼</button>
+            </div>
+            <div class="abtns">
+              <button type="button" id="runLock" class="lock" aria-pressed="false">Run lock</button>
+              <button type="button" data-act="run" class="b">B<small>run</small></button>
+              <button type="button" data-act="spin" class="c">C<small>spin</small></button>
+              <button type="button" data-act="jump" class="a">A<small>jump</small></button>
+              <button type="button" data-act="pause" class="s">Pause</button>
+              <button type="button" data-act="reserve" class="s">Item</button>
+            </div>
+          </div>
+        </div>
+
+        <aside id="editPanel" hidden aria-label="Edit Panel">
+          <div class="ep-head">
+            <div>
+              <h2>Edit Panel</h2>
+              <p>Every change applies instantly and is remembered in this browser.</p>
+            </div>
+            <button id="epClose" type="button" aria-label="Close the Edit Panel">✕</button>
+          </div>
+          <div id="epToast" class="toast" role="status" hidden></div>
+
+          <section class="ep-card">
+            <h3>Feel presets</h3>
+            <div id="epPresets" class="chips"></div>
+          </section>
+
+          <section class="ep-card">
+            <h3>Live readout</h3>
+            <dl id="epStats" class="stats"></dl>
+          </section>
+
+          <div id="epSections"></div>
+
+          <section class="ep-card">
+            <h3>Playtest tools</h3>
+            <div id="epActions" class="actions"></div>
+            <div class="warp">
+              <label for="epWarpSel">Warp to</label>
+              <select id="epWarpSel">
+                <option value="l1">Puffball Meadow</option>
+                <option value="l2">Gusty Glade</option>
+                <option value="l3">Thunderhead Keep</option>
+                <option value="palace">Cloud Switch Palace</option>
+              </select>
+              <button id="epWarp" type="button">Go</button>
+            </div>
+          </section>
+
+          <section class="ep-card">
+            <h3>Share your tweaks</h3>
+            <p class="note">Copy writes your changed settings as JSON. Paste someone else's JSON in the box and apply it.</p>
+            <textarea id="epJson" rows="4" spellcheck="false" placeholder='{"gravity": 0.5, "glideFallSpeed": 0.9}'></textarea>
+            <div class="actions two">
+              <button id="epExport" type="button">Copy settings</button>
+              <button id="epImport" type="button">Apply pasted JSON</button>
+            </div>
+            <div class="actions two">
+              <button id="epResetAll" type="button">Reset all settings</button>
+              <button id="epResetSave" type="button">Reset saved progress</button>
+            </div>
+          </section>
+        </aside>
+      </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/util.js"></script>
+    <script src="js/physics.js"></script>
+    <script src="js/levels.js"></script>
+    <script src="js/clay.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/input.js"></script>
+    <script src="js/terrain.js"></script>
+    <script src="js/entities.js"></script>
+    <script src="js/player.js"></script>
+    <script src="js/level.js"></script>
+    <script src="js/worldmap.js"></script>
+    <script src="js/game.js"></script>
+    <script src="js/editpanel.js"></script>
+    <script src="js/main.js"></script>
+  </body>
+</html>
