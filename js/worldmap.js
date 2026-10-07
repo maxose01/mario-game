@@ -497,7 +497,7 @@ class WorldMap {
       dino.state = walking ? 'ridden' : 'idle';
       Companion.prototype.draw.call(dino, ctx);
       ctx.save();
-      ctx.translate(x - this.facing * 2, y - 24 + hop);
+      ctx.translate(x - this.facing * 3, y - 19 + hop);
       drawHero(ctx, this.facing, save.power, 'ride', stub);
       ctx.restore();
     } else {

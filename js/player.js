@@ -470,7 +470,7 @@ class Player extends Entity {
     let power = this.power;
     const tf = this.level.transformAnim;
     if (tf && tf.t > 0) power = Math.floor(tf.t / 4) % 2 ? tf.from : tf.to;
-    if (this.riding) ctx.translate(-this.facing * 2, -24);
+    if (this.riding) ctx.translate(-this.facing * 3, -19);
     drawHero(ctx, this.facing, power, pose, this);
     ctx.restore();
     ctx.globalAlpha = 1;
@@ -592,9 +592,10 @@ function drawHero(ctx, f, power, pose, p) {
   } else if (pose === 'crouch') {
     bob = big ? 12 : 4;
   } else if (pose === 'ride') {
-    ff = [7, -2];
-    fb = [-3, -1];
-    af = [9, big ? -20 : -10];
+    ff = [8, -4];
+    fb = [-6, -3];
+    af = [9, big ? -22 : -11];
+    bob = big ? 3 : 2;
   } else if (pose === 'victory') {
     af = [5, big ? -52 : -30];
   } else if (pose === 'soar') {

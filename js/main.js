@@ -88,6 +88,10 @@ const Main = {
   },
 
   initButtons() {
+    // Hand focus back to the game after any toolbar click so game keys never press buttons.
+    document.getElementById('topbar').addEventListener('click', (e) => {
+      if (e.target.closest('button')) setTimeout(() => document.getElementById('game').focus(), 0);
+    });
     document.getElementById('muteBtn').addEventListener('click', (e) => {
       Sound.init();
       Sound.resume();

@@ -579,10 +579,11 @@ class Level {
     const p = this.player;
     if (this.clearKind === 'goal') {
       if (this.stateT > 110) p.auto = 0;
-      p.update();
+      if (p.auto || !p.onGround) p.update();
     }
     this.world(false);
-    if (this.stateT === 40) {
+    if (this.stateT >= 40 && !this.clearBanner) {
+      this.clearBanner = true;
       const t = this.clearKind === 'orb' ? 'KEEP CLEARED!' : this.clearKind === 'switch' ? 'SWITCH PRESSED!' : 'COURSE CLEAR!';
       this.banner = { text: t, t: 0, life: 9999, color: '#ffe27a' };
     }

@@ -43,6 +43,8 @@ const Input = {
     });
     window.addEventListener('keyup', (e) => {
       this.keys.delete(e.code);
+      // stop Space from "clicking" whatever button last had focus
+      if (this.codeToAction[e.code] && !this.isTyping(e)) e.preventDefault();
     });
     window.addEventListener('blur', () => {
       this.keys.clear();
