@@ -119,6 +119,11 @@ class HostLink {
   // ---- online (WebRTC via PeerJS) ----
   async startOnline() {
     this.mode = 'online';
+    // sandboxed previews (CLAYKART_EMBED) can't open WebRTC rooms, so don't pretend to try
+    if (window.CLAYKART_EMBED) {
+      this.h.onStatus('Phones can’t join this preview. Host from GitHub Pages or npm start for phone controllers; add keyboard, gamepad or touch racers here.', false);
+      return;
+    }
     this.h.onStatus('Opening an online room…', false);
     try {
       await Net.loadPeerJS();

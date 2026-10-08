@@ -93,7 +93,7 @@ const Screens = {
     $('scr-lobby').classList.toggle('solo', solo);
     // join card
     $('roomCode').textContent = Party.code || '····';
-    $('joinUrl').textContent = Party.joinUrl || 'Starting the party…';
+    $('joinUrl').textContent = Party.joinUrl || (window.CLAYKART_EMBED ? 'Phone joining is off in this preview' : 'Starting the party…');
     $('netStatus').textContent = Party.status.text;
     $('netStatus').classList.toggle('ok', Party.status.ok);
     if (Party.joinUrl && this.qrFor !== Party.joinUrl) {

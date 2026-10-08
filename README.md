@@ -36,7 +36,14 @@ phones). Tilt steering is only offered on https pages (browsers only allow motio
 secure context); drag steering works everywhere.
 
 How the big screen knows which mode to use: `js/served.js` says `CLAYKART_SERVER = false`, and
-`server.js` answers that one file with `true` instead.
+`server.js` answers that one file with `true` instead. A sandboxed preview that can't use WebRTC
+can also set `window.CLAYKART_EMBED = true` there; the lobby then says phones can't join and
+only offers keyboard, gamepad and touch racers.
+
+**Hosting on GitHub Pages.** In the repository's *Settings → Pages*, choose *Deploy from a
+branch*, pick this branch and `/ (root)`, and save. The game is then served at
+`https://<user>.github.io/<repo>/` and Party Race uses online mode, so phones can join from any
+network. The empty `.nojekyll` file tells Pages to serve the files as they are.
 
 ### Solo or same-screen
 
