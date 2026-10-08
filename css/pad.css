@@ -486,11 +486,15 @@ input {
   left: 50%;
   top: 30%;
   transform: translate(-50%, -50%);
-  font: 700 46px/1 var(--font-display);
+  font: 700 18px/1.2 var(--font-display);
   color: var(--gold);
   text-shadow: 0 3px 0 #8a4a1a, 0 6px 0 rgba(0, 0, 0, 0.3);
   pointer-events: none;
   text-align: center;
+  white-space: pre-line;
+}
+.banner::first-line {
+  font-size: 46px;
 }
 .sheet {
   position: fixed;

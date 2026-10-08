@@ -139,6 +139,7 @@ const Party = {
         c.brake = !!m.b;
         c.drift = !!m.d;
         c.back = !!m.k;
+        c.autoGas = m.a !== false;
         // item presses arrive as a counter so a quick tap is never lost
         const n = Number(m.i) || 0;
         if (n !== p.itemSeen) {
@@ -238,6 +239,7 @@ const Party = {
     for (const p of this.list()) {
       if (p.kind === 'local') {
         Input.read(p.src, p.autoGas, p.ctl);
+        p.ctl.autoGas = p.autoGas;
       } else if (p.ctl.itemQueued) {
         p.ctl.item = true;
         p.ctl.itemQueued = false;
@@ -289,7 +291,7 @@ const Party = {
 };
 
 function blankCtl() {
-  return { steer: 0, gas: false, brake: false, drift: false, item: false, back: false, itemQueued: false };
+  return { steer: 0, gas: false, brake: false, drift: false, item: false, back: false, itemQueued: false, autoGas: false };
 }
 function cleanName(n) {
   return String(n || '').replace(/[^\p{L}\p{N} _.\-!?']/gu, '').trim().slice(0, 12);

@@ -148,6 +148,10 @@ if (uWob > 0.0) {
 // Geometry kit: lumpy primitives with vertex colours, plus transforms and merging.
 const GK = {
   _c: null,
+  detail: 1, // segment multiplier: scenery is built coarser than karts
+  segs(n, min = 5) {
+    return Math.max(min, Math.round(n * this.detail));
+  },
   color(hex) {
     return (this._c || (this._c = new THREE.Color())).set(hex);
   },
@@ -183,7 +187,7 @@ const GK = {
   },
 
   blob(rx, ry, rz, hex, o = {}) {
-    const g = new THREE.SphereGeometry(1, o.ws || 16, o.hs || 12);
+    const g = new THREE.SphereGeometry(1, this.segs(o.ws || 12, 6), this.segs(o.hs || 9, 4));
     g.scale(rx, ry, rz);
     this.lump(g, o.lump !== undefined ? o.lump : Math.min(rx, ry, rz) * 0.18, o.freq || 2.2 / Math.max(0.3, Math.min(rx, ry, rz)), o.seed || 1);
     return this.paint(g, hex, o.vary, o.seed);
@@ -208,17 +212,17 @@ const GK = {
     return this.paint(g, hex, o.vary, o.seed);
   },
   cyl(rt, rb, h, hex, o = {}) {
-    const g = new THREE.CylinderGeometry(rt, rb, h, o.segs || 14, o.hsegs || 3, !!o.open);
+    const g = new THREE.CylinderGeometry(rt, rb, h, this.segs(o.segs || 12), o.hsegs || 3, !!o.open);
     this.lump(g, o.lump !== undefined ? o.lump : Math.min(rt, rb) * 0.12, o.freq || 2, o.seed || 1);
     return this.paint(g, hex, o.vary, o.seed);
   },
   cone(r, h, hex, o = {}) {
-    const g = new THREE.ConeGeometry(r, h, o.segs || 12, o.hsegs || 3);
+    const g = new THREE.ConeGeometry(r, h, this.segs(o.segs || 12), o.hsegs || 3);
     this.lump(g, o.lump !== undefined ? o.lump : r * 0.1, o.freq || 2, o.seed || 1);
     return this.paint(g, hex, o.vary, o.seed);
   },
   torus(R, r, hex, o = {}) {
-    const g = new THREE.TorusGeometry(R, r, o.rs || 10, o.ts || 20, o.arc || TAU);
+    const g = new THREE.TorusGeometry(R, r, this.segs(o.rs || 8), this.segs(o.ts || 18), o.arc || TAU);
     this.lump(g, o.lump !== undefined ? o.lump : r * 0.2, o.freq || 3, o.seed || 1);
     return this.paint(g, hex, o.vary, o.seed);
   },

@@ -48,7 +48,7 @@ class RaceView {
   }
 
   makeCam(idx, slot) {
-    const cam = new THREE.PerspectiveCamera(CFG.camFov, 16 / 9, 0.3, 1600);
+    const cam = new THREE.PerspectiveCamera(CFG.camFov, 16 / 9, 0.3, 700);
     cam.layers.enable(0);
     for (let s = 0; s < MAX_PLAYERS; s++) if (s !== slot) cam.layers.enable(1 + s);
     return { cam, idx, slot, yaw: 0, pos: new THREE.Vector3(), look: new THREE.Vector3(), shake: 0, fov: CFG.camFov, rect: null, lastLap: 0 };
@@ -241,6 +241,7 @@ class RaceView {
       v.cam.aspect = r.w / r.h;
       v.cam.updateProjectionMatrix();
       this.world.follow(v.cam);
+      this.world.cullFor(v.cam, 300 * Math.max(0.6, CFG.fog > 0 ? 1 / Math.sqrt(CFG.fog) : 2));
       renderer.render(this.world.scene, v.cam);
     }
     renderer.setScissorTest(false);
@@ -286,22 +287,28 @@ class RaceView {
 
   drawViewHUD(ctx, v, i, w, h, n) {
     const race = this.race, k = this.kartOf(v);
+    // with 3-4 views the shared minimap sits in the middle of the screen, so each quadrant
+    // keeps its HUD on its outer edges: right-hand views are mirrored, top views put the
+    // position at the top
+    const right = n >= 3 && v.rect.x > 1, top = n >= 3 && v.rect.y < 1;
+    const X = (x, wd = 0) => (right ? w - x - wd : x);
     // item slot
-    this.itemSlot(ctx, 24, 18, k);
+    this.itemSlot(ctx, X(24, 80), 18, k);
     if (k.key) {
-      Hud.panel(ctx, 112, 26, 54, 54, 14);
-      Icons.key(ctx, 139, 50, 44);
+      Hud.panel(ctx, X(112, 54), 26, 54, 54, 14);
+      Icons.key(ctx, X(139), 50, 44);
     }
     // coins & lap
-    Hud.panel(ctx, 20, h - 66, 230, 48);
-    Icons.coin(ctx, 46, h - 42, 40);
-    Clay.label(ctx, '× ' + k.coins, 66, h - 42, 24, k.coins >= 10 ? '#ffe066' : '#fff8ec');
-    Clay.label(ctx, 'LAP', 132, h - 42, 15, '#ffe27a');
-    Clay.label(ctx, `${Math.min(race.laps, Math.max(1, k.lap))}/${race.laps}`, 168, h - 42, 24);
+    const cx0 = X(20, 230);
+    Hud.panel(ctx, cx0, h - 66, 230, 48);
+    Icons.coin(ctx, cx0 + 26, h - 42, 40);
+    Clay.label(ctx, '× ' + k.coins, cx0 + 46, h - 42, 24, k.coins >= 10 ? '#ffe066' : '#fff8ec');
+    Clay.label(ctx, 'LAP', cx0 + 112, h - 42, 15, '#ffe27a');
+    Clay.label(ctx, `${Math.min(race.laps, Math.max(1, k.lap))}/${race.laps}`, cx0 + 148, h - 42, 24);
     // position
     const pl = k.place;
     ctx.save();
-    ctx.translate(w - 92, h - 64);
+    ctx.translate(right ? 92 : w - 92, top ? 70 : h - 64);
     const pop = k._placeT !== undefined && this.time - k._placeT < 0.3 ? 1 + (0.3 - (this.time - k._placeT)) : 1;
     ctx.scale(pop, pop);
     Clay.text(ctx, String(pl), -14, 0, 74, PLACE_COLS[pl - 1] || '#ffffff');

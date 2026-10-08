@@ -38,6 +38,7 @@ const KartModels = {
     const ws = WHEEL_SPECS[cfg.wheels] || WHEEL_SPECS.standard;
     const lift = ws.r - 0.4; // big wheels raise the whole kart
     const paint = [], detail = [];
+    GK.detail = 0.8;
     buildBody(cfg.body, paint, detail, lift);
     const ch = findPart('character', cfg.character);
     const seat = BODY_SEAT[cfg.body] || { x: -0.35, y: 0.75 };
@@ -55,6 +56,7 @@ const KartModels = {
       wheelPos: BODY_WHEELS[cfg.body] || BODY_WHEELS.classic,
       lift,
     };
+    GK.detail = 1;
     for (const k of ['paint', 'detail', 'head', 'wheel']) g[k].userData.shared = true;
     KART_GEO_CACHE.set(key, g);
     return g;

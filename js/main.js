@@ -295,6 +295,12 @@ const App = {
       k.ctl.gas = c.gas;
       k.ctl.brake = c.brake;
       k.ctl.drift = c.drift;
+      // with auto-gas the engine would always flood on the grid: Drift revs it instead,
+      // so holding Drift as the "1" appears gives the rocket start
+      if (race.state === 'countdown' && c.autoGas) {
+        k.ctl.gas = c.drift;
+        k.ctl.drift = false;
+      }
       k.ctl.item = c.item;
       k.ctl.back = c.back;
     }

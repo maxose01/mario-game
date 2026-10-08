@@ -65,12 +65,12 @@ class World3D {
 
   buildSky() {
     const th = this.theme;
-    const g = new THREE.SphereGeometry(1000, 32, 18);
+    const g = new THREE.SphereGeometry(640, 32, 18);
     const cols = new Float32Array(g.attributes.position.count * 3);
     const c0 = new THREE.Color(th.sky[0]), c1 = new THREE.Color(th.sky[1]), c2 = new THREE.Color(th.sky[2]);
     const c = new THREE.Color();
     for (let i = 0; i < g.attributes.position.count; i++) {
-      const y = g.attributes.position.getY(i) / 1000;
+      const y = g.attributes.position.getY(i) / 640;
       if (y > 0.15) c.copy(c1).lerp(c0, Math.min(1, (y - 0.15) / 0.6));
       else c.copy(c2).lerp(c1, U.clamp((y + 0.1) / 0.25, 0, 1));
       cols.set([c.r, c.g, c.b], i * 3);
@@ -97,19 +97,20 @@ class World3D {
     sun.renderOrder = -9;
     this.sunSprite = sun;
     sky.add(sun);
-    sun.position.copy(this.sunDir).multiplyScalar(820);
+    sun.scale.set(130, 130, 1);
+    sun.position.copy(this.sunDir).multiplyScalar(560);
     // distant clay clouds in a ring
     const rnd = U.rng(this.def.id.length * 31 + 7);
     const parts = [];
     const cloudCol = th.voidKind === 'lava' ? '#b48aa8' : th.cloud;
     for (let i = 0; i < 26; i++) {
       const a = (i / 26) * TAU + rnd() * 0.2;
-      const r = 520 + rnd() * 260;
+      const r = 420 + rnd() * 160;
       const cx = Math.cos(a) * r, cz = Math.sin(a) * r, cy = 30 + rnd() * 150;
       const w = 30 + rnd() * 50;
       for (let k = 0; k < 5; k++) {
         const t = k / 4 - 0.5;
-        parts.push(GK.at(GK.blob(w * (0.32 + rnd() * 0.18), w * (0.22 + rnd() * 0.1), w * 0.3, cloudCol, { seed: i * 9 + k, lump: 3, ws: 10, hs: 8 }), cx - Math.sin(a) * t * w * 1.1, cy + Math.sin((k / 4) * Math.PI) * w * 0.12, cz + Math.cos(a) * t * w * 1.1));
+        parts.push(GK.at(GK.blob(w * (0.32 + rnd() * 0.18), w * (0.22 + rnd() * 0.1), w * 0.3, cloudCol, { seed: i * 9 + k, lump: 3, ws: 9, hs: 6 }), cx - Math.sin(a) * t * w * 1.1, cy + Math.sin((k / 4) * Math.PI) * w * 0.12, cz + Math.cos(a) * t * w * 1.1));
       }
     }
     // sky clouds glow a little with the sky's colour so they never go grey in shadow
@@ -587,10 +588,10 @@ class World3D {
 
   crenellate(p, from, to, side, out) {
     const th = this.theme;
-    for (let i = from; i <= to; i += 3) {
+    for (let i = from; i <= to; i += 4) {
       const ii = p.wrap(i);
       const d = side * (p.hw[ii] + p.sh[ii] + 0.45);
-      out.push(GK.at(GK.box(0.9, 0.7, 1.3, th.wallTop, { seed: i, lump: 0.05 }), p.x[ii] + p.nx[ii] * d, p.y[ii] + 1.95, p.z[ii] + p.nz[ii] * d, 0, -p.head[ii], 0));
+      out.push(GK.at(GK.box(1.3, 0.7, 0.9, th.wallTop, { seed: i, lump: 0.05, seg: 2, r: 0.14 }), p.x[ii] + p.nx[ii] * d, p.y[ii] + 1.95, p.z[ii] + p.nz[ii] * d, 0, -p.head[ii], 0));
     }
   }
   railPosts(p, from, to, side, out) {
@@ -748,13 +749,15 @@ class World3D {
       const rnd = U.rng(42);
       const parts = [];
       const y0 = this.voidY + 6;
-      for (let k = 0; k < 140; k++) {
-        const a = rnd() * TAU, r = Math.sqrt(rnd()) * 520;
+      GK.detail = 0.7;
+      for (let k = 0; k < 110; k++) {
+        const a = rnd() * TAU, r = Math.sqrt(rnd()) * 480;
         const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
         const s = 18 + rnd() * 30;
         parts.push(GK.at(GK.blob(s, s * 0.32, s * 0.8, rnd() < 0.5 ? th.cloud : th.cloudShade, { seed: k, lump: 3, ws: 10, hs: 7 }), x, y0 + rnd() * 6, z));
       }
-      this.add(GK.merge(parts), this.keep(Clay3D.material({ vertexColors: true, wobble: 0.8, freq: 0.08, rim: 0.5 })), 'cloudsea');
+      GK.detail = 1;
+      this.addChunked(parts, this.keep(Clay3D.material({ vertexColors: true, wobble: 0.8, freq: 0.08, rim: 0.5 })), 'cloudsea');
       // a flat floor so nothing shows through the gaps
       const geo = new THREE.PlaneGeometry(3000, 3000);
       geo.rotateX(-Math.PI / 2);
@@ -770,7 +773,8 @@ class World3D {
     const T = this.track, th = this.theme, t = this.terrain;
     const rnd = U.rng(this.def.id.charCodeAt(0) * 101);
     const parts = [];
-    const count = this.def.theme === 'lava' ? 220 : 520;
+    const count = this.def.theme === 'lava' ? 180 : this.def.theme === 'snow' ? 300 : 380;
+    GK.detail = 0.5;
     const loc = {};
     let placed = 0;
     for (let tries = 0; tries < count * 6 && placed < count; tries++) {
@@ -789,7 +793,36 @@ class World3D {
       parts.push(GK.at(g, x, h, z, 0, rnd() * TAU, 0));
       placed++;
     }
-    if (parts.length) this.add(GK.merge(parts), this.clayMat, 'decor');
+    GK.detail = 1;
+    this.addChunked(parts, this.clayMat, 'decor');
+  }
+
+  // Merge pieces into one mesh per 70-unit cell, so cells behind the camera are culled.
+  addChunked(parts, mat, name) {
+    const cells = new Map();
+    for (const g of parts) {
+      g.computeBoundingSphere();
+      const c = g.boundingSphere.center;
+      const key = Math.floor(c.x / 70) + ',' + Math.floor(c.z / 70);
+      if (!cells.has(key)) cells.set(key, []);
+      cells.get(key).push(g);
+    }
+    this.chunks = this.chunks || [];
+    for (const list of cells.values()) {
+      const m = this.add(GK.merge(list), mat, name);
+      m.geometry.computeBoundingSphere();
+      this.chunks.push({ mesh: m, c: m.geometry.boundingSphere.center, r: m.geometry.boundingSphere.radius });
+    }
+  }
+
+  // Hide scenery chunks deep in the haze (they would be fogged out anyway).
+  cullFor(camera, maxDist) {
+    if (!this.chunks) return;
+    const p = camera.position;
+    for (const ch of this.chunks) {
+      const d = Math.hypot(ch.c.x - p.x, ch.c.z - p.z) - ch.r;
+      ch.mesh.visible = d < maxDist;
+    }
   }
 
   decorPiece(kind, rnd, seed) {
@@ -873,7 +906,7 @@ class World3D {
       if (!make) continue;
       make.call(this, lm, pt.x, y, pt.z, pt.head, parts);
     }
-    if (parts.length) this.add(GK.merge(parts), this.clayMat, 'landmarks');
+    this.addChunked(parts, this.clayMat, 'landmarks');
   }
 
   pathLandmark(lm, parts) {
@@ -981,6 +1014,15 @@ class World3D {
   }
 
   update(time, race) {
+    // the Edit Panel's Haze slider
+    const f = this.scene.fog;
+    if (CFG.fog > 0.01) {
+      f.near = 90 / CFG.fog;
+      f.far = 520 / Math.sqrt(CFG.fog);
+    } else {
+      f.near = 5000;
+      f.far = 6000;
+    }
     for (const a of this.anims) a(time);
     if (this.padTex) this.padTex.offset.y = -time * 1.8;
     if (race && this.gates) {

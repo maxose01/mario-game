@@ -459,7 +459,7 @@ let lastSent = '';
 function sendInput() {
   const s = Math.round(currentSteer() * 100) / 100;
   const brake = P.held.brake;
-  const msg = { t: 'in', s, g: P.opts.autoGas ? !brake : P.held.gas, b: brake, d: P.held.drift, i: P.itemCount, k: P.back };
+  const msg = { t: 'in', s, g: P.opts.autoGas ? !brake : P.held.gas, b: brake, d: P.held.drift, i: P.itemCount, k: P.back, a: P.opts.autoGas };
   const key = JSON.stringify(msg);
   // resend at least every 250 ms so a dropped packet heals quickly
   const now = performance.now();
@@ -498,7 +498,7 @@ function renderHud(m) {
   drift.classList.toggle('lvl1', m.drift === 1);
   drift.classList.toggle('lvl2', m.drift === 2);
   drift.classList.toggle('lvl3', m.drift === 3);
-  if (m.state === 'countdown' && m.count) banner(String(m.count), 0.9);
+  if (m.state === 'countdown' && m.count) banner(m.count + (P.opts.autoGas ? '\nHold Drift on 1 for a rocket start' : ''), 0.9);
   else if (m.wrong) banner('Wrong way!', 0.5);
   else if (m.finished && !P.finBanner) {
     P.finBanner = true;
