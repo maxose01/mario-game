@@ -48,6 +48,11 @@ const server = http.createServer((req, res) => {
     res.writeHead(400).end();
     return;
   }
+  if (url.pathname.endsWith('/js/served.js')) {
+    res.writeHead(200, { 'Content-Type': MIME['.js'], 'Cache-Control': 'no-store' });
+    res.end("'use strict';\nwindow.CLAYKART_SERVER = true;\n");
+    return;
+  }
   if (url.pathname === '/api/info') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     res.end(JSON.stringify({ app: 'clay-kart', ips: lanAddresses(), port: PORT, rooms: rooms.size }));

@@ -30,8 +30,13 @@ bot keeps its kart going until it reconnects, and a big screen that reloads gets
 **Online mode.** If the game is opened from a static web host (no `server.js`), Party Race
 falls back to peer-to-peer WebRTC through the public PeerJS broker, so phones can join over the
 internet. That needs an internet connection; on a local network `npm start` is the reliable
-choice. Tilt steering is only offered on https pages (browsers only allow motion sensors in a
+choice. To use your own PeerJS server instead of the public one, add
+`?peer=your.host:9000/path` to the big screen's address (the QR code passes it on to the
+phones). Tilt steering is only offered on https pages (browsers only allow motion sensors in a
 secure context); drag steering works everywhere.
+
+How the big screen knows which mode to use: `js/served.js` says `CLAYKART_SERVER = false`, and
+`server.js` answers that one file with `true` instead.
 
 ### Solo or same-screen
 
@@ -116,6 +121,7 @@ sharing tweaks.
 index.html          big screen: menus, HUD canvas, touch pad, Edit Panel
 pad.html            phone controller
 server.js           zero-dependency static server + WebSocket room relay
+js/served.js        "is the party server here?" flag (rewritten by server.js)
 css/style.css       big-screen look (shared with Super Clay Isles)
 css/pad.css         phone controller look
 vendor/             three.js r159, qrcode-generator, PeerJS (all MIT)

@@ -26,6 +26,11 @@ const Screens = {
     $('pauseRestart').addEventListener('click', () => App.leaderAction('restart'));
     $('pauseQuit').addEventListener('click', () => App.leaderAction('lobby'));
     $('titleFoot').textContent = 'Tab: Edit Panel   ·   M: sound   ·   F: fullscreen';
+    // a little parade of clay racers and items on the how-to card
+    const strip = $('howtoStrip');
+    for (const c of CHARACTERS) strip.appendChild(Icons.canvas(46, 46, (g) => Icons.head(g, c.id, 23, 25, 42)));
+    for (const it of ITEM_KINDS) strip.appendChild(Icons.canvas(46, 46, (g) => Icons.item(g, it, 23, 23, 40)));
+    strip.appendChild(Icons.canvas(46, 46, (g) => Icons.key(g, 23, 21, 40)));
   },
 
   show(name) {

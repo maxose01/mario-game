@@ -11,7 +11,7 @@ const CODE_CHARS = 'BCDFGHJKLMNPQRSTVWXZ';
 const Net = {
   // Is the page served by our own party server?
   async serverInfo() {
-    if (!/^https?:$/.test(location.protocol)) return null;
+    if (!/^https?:$/.test(location.protocol) || !window.CLAYKART_SERVER) return null;
     try {
       const ctl = new AbortController();
       const timer = setTimeout(() => ctl.abort(), 2500);
@@ -32,6 +32,16 @@ const Net = {
     let c = '';
     for (let i = 0; i < 4; i++) c += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
     return c;
+  },
+  // Online mode uses the public PeerJS broker unless ?peer=host[:port][/path] names your own.
+  peerParam() {
+    return new URLSearchParams(location.search).get('peer') || '';
+  },
+  peerOptions() {
+    const m = /^([\w.-]+)(?::(\d+))?(\/[\w./-]*)?$/.exec(this.peerParam());
+    if (!m) return { debug: 0 };
+    const secure = location.protocol === 'https:';
+    return { debug: 0, host: m[1], port: m[2] ? Number(m[2]) : secure ? 443 : 80, path: m[3] || '/', secure };
   },
   loadPeerJS() {
     if (window.Peer) return Promise.resolve();
@@ -107,7 +117,7 @@ class HostLink {
     }
     const tryOpen = (attempt) => {
       const code = Net.randomCode();
-      const peer = new window.Peer(NET_PREFIX + code, { debug: 0 });
+      const peer = new window.Peer(NET_PREFIX + code, Net.peerOptions());
       peer.on('open', () => {
         this.peer = peer;
         this.code = code;
@@ -153,7 +163,8 @@ class HostLink {
       return `${location.protocol}//${host}${path}pad.html?room=${this.code}`;
     }
     const base = location.href.replace(/[^/]*([?#].*)?$/, '');
-    return `${base}pad.html?room=${this.code}&online=1`;
+    const peer = Net.peerParam();
+    return `${base}pad.html?room=${this.code}&online=1${peer ? '&peer=' + encodeURIComponent(peer) : ''}`;
   }
 
   send(pid, msg) {
@@ -237,7 +248,7 @@ class PadLink {
       this.h.onClose('no-peerjs');
       return;
     }
-    const peer = (this.peer = new window.Peer({ debug: 0 }));
+    const peer = (this.peer = new window.Peer(Net.peerOptions()));
     peer.on('open', () => {
       const conn = (this.conn = peer.connect(NET_PREFIX + this.code, { serialization: 'json', reliable: true }));
       conn.on('open', () => {

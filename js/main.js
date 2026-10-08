@@ -383,8 +383,7 @@ const App = {
           if (mine) Sound.play('sparks' + e.a);
           break;
         case 'boost':
-          if (mine && e.a !== 'pad') Sound.play('boost');
-          else if (mine && e.a === 'pad') Sound.play('boost');
+          if (mine) Sound.play('boost');
           break;
         case 'box':
           if (mine) Sound.play('box');
