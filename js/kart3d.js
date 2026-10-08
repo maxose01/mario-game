@@ -36,7 +36,19 @@ const KartModels = {
   geometry(cfg) {
     const key = cfg.body + '|' + cfg.wheels + '|' + cfg.character;
     let g = KART_GEO_CACHE.get(key);
-    if (g) return g;
+    if (g) {
+      // most recently used last, so the trim below drops the stalest shapes
+      KART_GEO_CACHE.delete(key);
+      KART_GEO_CACHE.set(key, g);
+      return g;
+    }
+    // every race brings 8 random bot karts: keep the cache (and GPU memory) bounded on long
+    // parties. A trimmed shape still on screen just gets uploaded again.
+    if (KART_GEO_CACHE.size >= 48) {
+      const [oldKey, old] = KART_GEO_CACHE.entries().next().value;
+      KART_GEO_CACHE.delete(oldKey);
+      for (const k of ['paint', 'detail', 'head', 'wheel']) if (old[k]) old[k].dispose();
+    }
     const ws = WHEEL_SPECS[cfg.wheels] || WHEEL_SPECS.standard;
     const lift = ws.r - 0.4; // big wheels raise the whole kart
     const paint = [], detail = [];
