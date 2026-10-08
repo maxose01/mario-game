@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const SIM_FILES = ['config', 'util', 'parts', 'tracks', 'track', 'kart', 'items', 'ai', 'race'];
+const SIM_FILES = ['config', 'util', 'parts', 'tracks', 'courses/meadow', 'courses/sherbet', 'courses/magma', 'courses/mount', 'track', 'kart', 'items', 'ai', 'race'];
 
 function loadGame(files = SIM_FILES) {
   const root = path.join(__dirname, '..');

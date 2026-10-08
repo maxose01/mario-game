@@ -1,13 +1,18 @@
 'use strict';
 // Track geometry and queries (pure: no rendering, shared with the Node tests).
-// A track is drawn like a turtle walk (straights and arcs), auto-closed into a smooth loop and
-// resampled every unit. Hidden routes are branches drawn relative to that loop. Physics then
-// asks: which road am I on, how far along and off-centre, what surface, how high is the ground.
+// A track is drawn like a turtle walk (straights and arcs), auto-closed into a smooth loop (or
+// left open for a point-to-point run) and resampled every unit. Hidden routes are branches drawn
+// relative to the main road. Physics then asks: which road am I on, how far along and
+// off-centre, what surface, how high is the ground.
+//
+// Banking: each sample has a bank slope (tan of the bank angle, + = right side low), so the
+// ground at d units right of the centre line is at y - d * bank. point() and project() return
+// that banked height in .y (and the centre height in .yc), so physics needs no special cases.
 
 const TRACK_STEP = 1; // units between samples
 
 class TrackPath {
-  // pts: dense polyline [{x, y, z, hw, sh, wallL, wallR}]
+  // pts: dense polyline [{x, y, z, hw, sh, wallL, wallR, bank, ag, style}]
   constructor(id, pts, closed) {
     this.id = id;
     this.closed = closed;
@@ -35,6 +40,9 @@ class TrackPath {
     this.hw = A(Float32Array); this.sh = A(Float32Array);
     this.s = A(Float32Array);
     this.wallL = A(Uint8Array); this.wallR = A(Uint8Array); // 1 wall, 0 drop, 2 open (joins another road)
+    this.bank = A(Float32Array); // tan(bank angle), + = right side low
+    this.ag = A(Uint8Array); // 1 = anti-gravity
+    this.style = new Array(n); // road style name per sample (rendering only)
     let j = 0;
     for (let i = 0; i < n; i++) {
       const target = i * step;
@@ -47,10 +55,27 @@ class TrackPath {
       this.z[i] = a.z + (b.z - a.z) * t;
       this.hw[i] = a.hw + (b.hw - a.hw) * t;
       this.sh[i] = a.sh + (b.sh - a.sh) * t;
+      this.bank[i] = (a.bank || 0) + ((b.bank || 0) - (a.bank || 0)) * t;
       const c = t < 0.5 ? a : b;
       this.wallL[i] = c.wallL ? 1 : 0;
       this.wallR[i] = c.wallR ? 1 : 0;
+      this.ag[i] = c.ag ? 1 : 0;
+      this.style[i] = c.style || 'road';
       this.s[i] = target;
+    }
+  }
+
+  // Ease the bank profile with a box filter (twice) so transitions between segments are smooth
+  // and a run of banked arcs stays banked.
+  smoothBank(radius) {
+    const r = Math.max(1, Math.round(radius / this.step));
+    for (let pass = 0; pass < 2; pass++) {
+      const src = Float32Array.from(this.bank);
+      for (let i = 0; i < this.n; i++) {
+        let sum = 0;
+        for (let k = -r; k <= r; k++) sum += src[this.wrap(i + k)];
+        this.bank[i] = sum / (2 * r + 1);
+      }
     }
   }
 
@@ -102,7 +127,9 @@ class TrackPath {
     nz /= nl;
     out.x = L(this.x) + nx * d;
     out.z = L(this.z) + nz * d;
-    out.y = L(this.y);
+    out.yc = L(this.y);
+    out.bank = L(this.bank);
+    out.y = out.yc - d * out.bank;
     out.hw = L(this.hw);
     out.sh = L(this.sh);
     out.tx = nz; // n = (-tz, tx)
@@ -125,13 +152,23 @@ function closed(pts, isClosed) {
 // ---------------------------------------------------------------------------
 // Turtle builder: segments are {s: len} straights or {r|l: degrees, rad} arcs, with optional
 // end elevation y, end half-width hw, shoulder sh, and wall flags for the segment.
+// Bank slope for a segment: degrees -> tan, tilted into an arc's turn (or by sign on straights).
+function segBank(seg) {
+  const deg = seg.bank || 0;
+  if (!deg) return 0;
+  const turnSign = seg.r ? 1 : seg.l ? -1 : 0;
+  const dir = turnSign ? turnSign * Math.sign(deg) : Math.sign(deg);
+  return dir * Math.tan((Math.min(75, Math.abs(deg)) * Math.PI) / 180);
+}
+
 function walkTurtle(def, lengths) {
   const pts = [];
   let x = 0, z = 0, h = def.heading || 0, y = def.y || 0;
   let hw = def.hw, sh = def.sh;
   const marks = [];
   let s = 0;
-  pts.push({ x, z, y, hw, sh, wallL: def.wallL, wallR: def.wallR });
+  const seg0 = def.segments[0] || {};
+  pts.push({ x, z, y, hw, sh, wallL: def.wallL, wallR: def.wallR, bank: segBank(seg0), ag: seg0.antigrav ? 1 : 0, style: seg0.style || def.style || 'road' });
   def.segments.forEach((seg, k) => {
     const len = seg.s !== undefined ? lengths[k] : seg.rad * ((seg.r || seg.l) * Math.PI) / 180;
     const turn = seg.r ? (seg.r * Math.PI) / 180 : seg.l ? (-seg.l * Math.PI) / 180 : 0;
@@ -141,6 +178,7 @@ function walkTurtle(def, lengths) {
     const sh0 = sh, sh1 = seg.sh !== undefined ? seg.sh : sh;
     const wallL = seg.wallL !== undefined ? seg.wallL : def.wallL;
     const wallR = seg.wallR !== undefined ? seg.wallR : def.wallR;
+    const bank = segBank(seg), ag = seg.antigrav ? 1 : 0, style = seg.style || def.style || 'road';
     marks.push({ s, len });
     for (let i = 1; i <= steps; i++) {
       const t = i / steps;
@@ -151,7 +189,7 @@ function walkTurtle(def, lengths) {
       z += Math.sin(hm) * ds;
       h += turn / steps;
       const e = t * t * (3 - 2 * t);
-      pts.push({ x, z, y: y0 + (y1 - y0) * e, hw: hw0 + (hw1 - hw0) * e, sh: sh0 + (sh1 - sh0) * e, wallL, wallR });
+      pts.push({ x, z, y: y0 + (y1 - y0) * e, hw: hw0 + (hw1 - hw0) * e, sh: sh0 + (sh1 - sh0) * e, wallL, wallR, bank, ag, style });
     }
     s += len;
     y = y1;
@@ -222,9 +260,12 @@ function catmull(ctrl, perSeg) {
       const t = k / steps, t2 = t * t, t3 = t2 * t;
       const f = (a, b, c, d) => 0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
       const o = {};
-      for (const key of ['x', 'y', 'z', 'hw', 'sh']) o[key] = f(p0[key], p1[key], p2[key], p3[key]);
-      o.wallL = t < 0.5 ? p1.wallL : p2.wallL;
-      o.wallR = t < 0.5 ? p1.wallR : p2.wallR;
+      for (const key of ['x', 'y', 'z', 'hw', 'sh', 'bank']) o[key] = f(p0[key] || 0, p1[key] || 0, p2[key] || 0, p3[key] || 0);
+      const c = t < 0.5 ? p1 : p2;
+      o.wallL = c.wallL;
+      o.wallR = c.wallR;
+      o.ag = c.ag;
+      o.style = c.style;
       out.push(o);
     }
   }
@@ -236,19 +277,41 @@ class Track {
   constructor(def) {
     this.def = def;
     this.id = def.id;
-    const loop = buildMainLoop(def);
-    // The start line sits a little way down the first straight, so the grid behind it is on
-    // the straight too (not in the last corner). Rotate the loop to begin there.
-    const startAt = def.startAt !== undefined ? def.startAt : Math.min(44, loop.marks[0].len * 0.45);
-    let acc = 0, j = 0;
-    for (; j < loop.pts.length - 1 && acc < startAt; j++) acc += Math.hypot(loop.pts[j + 1].x - loop.pts[j].x, loop.pts[j + 1].z - loop.pts[j].z);
-    const pts = loop.pts.slice(j).concat(loop.pts.slice(0, j));
-    this.marks = loop.marks.map((m) => ({ s: m.s - acc, len: m.len }));
-    this.main = new TrackPath('main', pts, true);
+    this.p2p = !!def.p2p;
+    if (this.p2p) {
+      // point-to-point: the walk itself is the road, from the top to the finish
+      const w = walkTurtle(def, def.segments.map((g) => (g.s !== undefined ? g.s : 0)));
+      this.marks = w.marks;
+      this.main = new TrackPath('main', w.pts, false);
+    } else {
+      const loop = buildMainLoop(def);
+      // The start line sits a little way down the first straight, so the grid behind it is on
+      // the straight too (not in the last corner). Rotate the loop to begin there.
+      const startAt = def.startAt !== undefined ? def.startAt : Math.min(44, loop.marks[0].len * 0.45);
+      let acc = 0, j = 0;
+      for (; j < loop.pts.length - 1 && acc < startAt; j++) acc += Math.hypot(loop.pts[j + 1].x - loop.pts[j].x, loop.pts[j + 1].z - loop.pts[j].z);
+      const pts = loop.pts.slice(j).concat(loop.pts.slice(0, j));
+      this.marks = loop.marks.map((m) => ({ s: m.s - acc, len: m.len }));
+      this.main = new TrackPath('main', pts, true);
+    }
     this.main.index = 0;
+    this.main.smoothBank(def.bankBlend !== undefined ? def.bankBlend : 12);
     this.paths = [this.main];
     this.byId = { main: this.main };
     this.length = this.main.length;
+    // Where the race starts and ends along the main road. A circuit's start line is also its
+    // finish line (s = 0); a point-to-point run starts startAt units in and finishes runout
+    // units before the end of the road. lapLen is the distance raced per lap (the whole run).
+    this.startS = this.p2p ? (def.startAt !== undefined ? def.startAt : 40) : 0;
+    this.finishS = this.p2p ? this.length - (def.runout !== undefined ? def.runout : 50) : this.length;
+    this.lapLen = this.finishS - this.startS;
+    this.sections = this.p2p
+      ? (def.sections || [{ name: def.name }]).map((sec, i) => ({
+          name: sec.name || `Section ${i + 1}`,
+          music: sec.music || def.music,
+          s: i === 0 ? this.startS : this.segS(sec.seg, sec.t || 0) + (sec.ds || 0),
+        }))
+      : [];
     this.branches = [];
     for (const b of def.branches || []) this.addBranch(b);
     this.buildGrid();
@@ -258,6 +321,23 @@ class Track {
     this.buildZones();
     this.objects = this.resolveObjects();
     this._tmp = {};
+  }
+
+  // Distance from main-road position a forward to b (wrapping on a circuit; can be negative on
+  // a point-to-point run, meaning b is behind).
+  aheadS(a, b) {
+    const L = this.length;
+    return this.main.closed ? (((b - a) % L) + L) % L : b - a;
+  }
+  // 1-based section index at a main-road s (0 on circuits).
+  sectionAt(mainS) {
+    let n = 0;
+    for (const sec of this.sections) if (mainS >= sec.s) n++;
+    return Math.max(this.sections.length ? 1 : 0, n);
+  }
+  // Is the located point on anti-gravity road?
+  isAntigrav(loc) {
+    return !!(loc && loc.path && (loc.path.ag[loc.i] || this.zoneAt(loc, 'antigrav')));
   }
 
   // s along the main loop for a {seg, t} reference (t in 0..1 of that turtle segment).
@@ -306,10 +386,13 @@ class Track {
     const toS = (((this.segS(b.to[0], b.to[1])) % L) + L) % L;
     const span = (((toS - fromS) % main.length) + main.length) % main.length;
     const hw = b.hw || 6, sh = b.sh !== undefined ? b.sh : 2;
-    // control points (u along the main span, d lateral, dy elevation offset)
-    const ctrl = b.pts.map(([u, d, dy]) => {
+    const style = b.style || 'road', ag = b.antigrav ? 1 : 0;
+    // control points (u along the main span, d lateral, dy elevation offset, optional bank in
+    // degrees, + = right side low); heights follow the main road's centre line
+    const ctrl = b.pts.map(([u, d, dy, bankDeg]) => {
       const p = main.point(fromS + span * u, d);
-      return { x: p.x, y: p.y + (dy || 0), z: p.z, hw, sh, wallL: b.wallL !== undefined ? b.wallL : true, wallR: b.wallR !== undefined ? b.wallR : true };
+      const bank = bankDeg ? Math.tan((Math.max(-75, Math.min(75, bankDeg)) * Math.PI) / 180) : 0;
+      return { x: p.x, y: p.yc + (dy || 0), z: p.z, hw, sh, bank, ag, style, wallL: b.wallL !== undefined ? b.wallL : true, wallR: b.wallR !== undefined ? b.wallR : true };
     });
     // phantom points along the main tangent so the branch leaves and rejoins smoothly
     const a0 = main.point(fromS - 12, b.pts[0][1]), a1 = main.point(toS + 12, b.pts[b.pts.length - 1][1]);
@@ -323,7 +406,9 @@ class Track {
     this.byId[b.id] = path;
     this.branches.push(path);
     path.gateSpec = b.gate;
-    path.routeName = b.name || 'Hidden route';
+    // no gate: an open alternative route (a fork in the road) anyone may take
+    path.open = b.gate === undefined || b.gate === null;
+    path.routeName = b.name || (path.open ? 'Side road' : 'Hidden route');
   }
 
   // Guard rails: turn drop edges into walls over a stretch, e.g. around the mouth of a
@@ -424,7 +509,9 @@ class Track {
       const dx = x - p.x[i], dz = z - p.z[i];
       let dd = dx * dx + dz * dz;
       if (y !== undefined && y !== null) {
-        const dy = Math.abs(y - p.y[i]) - 5;
+        // compare against the (banked) road height at this lateral offset
+        const dl = dx * p.nx[i] + dz * p.nz[i];
+        const dy = Math.abs(y - (p.y[i] - dl * p.bank[i])) - 5;
         if (dy > 0) dd += dy * dy * 4;
       }
       if (dd < bestD[pi]) {
@@ -469,10 +556,18 @@ class Track {
     out.i = i;
     out.d = d;
     let s = p.s[i] + along;
+    // how far beyond either end of an open path (0 when alongside it)
+    out.over = 0;
+    if (!p.closed) {
+      if (s > p.length) out.over = s - p.length;
+      else if (s < 0) out.over = -s;
+    }
     if (p.closed) s = ((s % p.length) + p.length) % p.length;
     else s = Math.max(0, Math.min(p.length, s));
     out.s = s;
-    out.y = p.y[i] + (p.y[j] - p.y[i]) * f;
+    out.yc = p.y[i] + (p.y[j] - p.y[i]) * f;
+    out.bank = p.bank[i] + (p.bank[j] - p.bank[i]) * f;
+    out.y = out.yc - d * out.bank;
     out.hw = p.hw[i] + (p.hw[j] - p.hw[i]) * f;
     out.sh = p.sh[i] + (p.sh[j] - p.sh[i]) * f;
     out.tx = p.tx[i];
@@ -491,7 +586,7 @@ class Track {
         for (const side of [-1, 1]) {
           const R = p.hw[i] + p.sh[i] + 0.4;
           const ex = p.x[i] + p.nx[i] * R * side, ez = p.z[i] + p.nz[i] * R * side;
-          if (this.insideOther(p, ex, ez, p.y[i], tmp)) {
+          if (this.insideOther(p, ex, ez, p.y[i] - R * side * p.bank[i], tmp)) {
             if (side < 0) p.wallL[i] = 2;
             else p.wallR[i] = 2;
           }
@@ -533,7 +628,7 @@ class Track {
       if (z.t1 !== undefined) s1 = this.segS(z.seg, z.t1);
       if (z.u1 !== undefined) s1 = z.u1 * w.path.length;
       const half = (z.w !== undefined ? z.w : 200) / 2;
-      const add = (a, b) => w.path.zones.push({ kind: z.kind, path: w.path, s0: a, s1: b, d0: (z.d || 0) - half, d1: (z.d || 0) + half, h: z.h || 0 });
+      const add = (a, b) => w.path.zones.push({ kind: z.kind, path: w.path, s0: a, s1: b, d0: (z.d || 0) - half, d1: (z.d || 0) + half, h: z.h || 0, flow: z.flow || 0 });
       if (w.path.closed) {
         // keep zones inside 0..L, splitting any that cross the start line
         const L = w.path.length;
@@ -558,7 +653,8 @@ class Track {
     }
     return null;
   }
-  // Ground height under a located point (ramps lift it, gaps remove it). -Infinity = no ground.
+  // Ground height under a located point (ramps and moguls lift it, gaps remove it).
+  // -Infinity = no ground.
   groundY(loc) {
     if (!loc || loc.excess > 0.25) return -Infinity;
     let y = loc.y;
@@ -567,15 +663,23 @@ class Track {
       const z = zs[k];
       if (loc.s < z.s0 || loc.s > z.s1 || loc.d < z.d0 || loc.d > z.d1) continue;
       if (z.kind === 'gap') return -Infinity;
-      if (z.kind === 'ramp') y += z.h * ((loc.s - z.s0) / (z.s1 - z.s0));
+      const u = (loc.s - z.s0) / (z.s1 - z.s0 || 1);
+      if (z.kind === 'ramp' || z.kind === 'glide') y += z.h * u;
+      else if (z.kind === 'hump') y += z.h * Math.sin(Math.PI * u);
     }
     return y;
   }
+  // What the tyres are on: road, offroad, boost, ice, mud, shallow, ramp (also moguls), glide,
+  // or void. Zones that are not surfaces (current, antigrav, gap) are looked up separately.
   surface(loc) {
     if (!loc) return 'void';
-    const z = this.zoneAt(loc);
-    if (z && z.kind !== 'gap') {
-      if (z.kind === 'ramp') return loc.onRoad ? 'ramp' : 'offroad';
+    const zs = loc.path.zones;
+    for (let k = 0; k < zs.length; k++) {
+      const z = zs[k];
+      if (loc.s < z.s0 || loc.s > z.s1 || loc.d < z.d0 || loc.d > z.d1) continue;
+      if (!SURFACE_ZONES[z.kind]) continue;
+      if (z.kind === 'ramp' || z.kind === 'hump') return loc.onRoad ? 'ramp' : 'offroad';
+      if (z.kind === 'glide') return loc.onRoad ? 'glide' : 'offroad';
       return z.kind;
     }
     return loc.onRoad ? 'road' : 'offroad';
@@ -583,8 +687,14 @@ class Track {
 
   // ---------- placed objects ----------
   resolveObjects() {
-    const out = { boxes: [], coins: [], keys: [], hazards: [], gates: [] };
+    const out = { boxes: [], coins: [], keys: [], hazards: [], gates: [], rings: [] };
     const d = this.def;
+    for (const r of d.rings || []) {
+      // a ring hangs h above the road at that spot, facing along the road
+      const w = this.where(r);
+      const p = w.path.point(w.s, r.d || 0);
+      out.rings.push({ x: p.x, y: p.y + (r.h !== undefined ? r.h : 4), z: p.z, head: p.head, tx: p.tx, tz: p.tz, r: r.r || 3.2, path: w.path, s: w.s });
+    }
     for (const row of d.boxes || []) {
       const w = this.where(row);
       for (const off of row.d) {
@@ -629,11 +739,15 @@ class Track {
   // Grid start positions: two columns, staggered, behind the line.
   gridSlot(k) {
     const row = Math.floor(k / 2), col = k % 2;
-    const s = -7 - row * 5.2 - col * 2.4;
-    const p = this.main.point(s, (col ? 1 : -1) * Math.min(3.6, this.main.hw[0] * 0.45));
+    const s = this.startS - 7 - row * 5.2 - col * 2.4;
+    const hw = this.main.hw[this.main.indexAt(this.startS)];
+    const p = this.main.point(s, (col ? 1 : -1) * Math.min(3.6, hw * 0.45));
     return { x: p.x, y: p.y, z: p.z, head: p.head, s };
   }
 }
+
+// Zone kinds that are driving surfaces (the rest are looked up with zoneAt).
+const SURFACE_ZONES = { boost: 1, ice: 1, mud: 1, shallow: 1, ramp: 1, glide: 1, hump: 1 };
 
 function trimTo(dense, a, b) {
   let i0 = 0, i1 = dense.length - 1, d0 = Infinity, d1 = Infinity;

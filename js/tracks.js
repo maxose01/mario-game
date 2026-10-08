@@ -1,209 +1,66 @@
 'use strict';
-// The three courses. Each is a turtle walk (see track.js) plus everything placed along it.
-// Placements use {seg, t} = turtle segment index and fraction along it, d = metres right of
-// the centre line (negative = left). Branch placements use {path, u} = fraction along the branch.
-// Every course hides one key-locked route: grab the floating key, then drive into the gate.
+// The course registry and the course format. Each course lives in its own file in js/courses/
+// (pure data, loaded by the big screen and by the Node tests) and pushes itself onto TRACK_DEFS;
+// its 3D landmark builders live in js/scenery/ (browser only). Courses are listed in load order,
+// which is also their difficulty order.
+//
+// A course is a turtle walk (see track.js) plus everything placed along it.
+//
+// Course fields
+//   id, name, blurb, music, theme (a THEMES key), difficulty (1 easiest .. 4 hardest)
+//   hw, sh            road half-width and shoulder width (per segment overrides allowed)
+//   wallL, wallR      default edges: true = wall/hedge, false = a drop into the void
+//   y, heading        start elevation and heading (radians) of the walk
+//   style             default road style (see ROAD_STYLES)
+//   segments          [{s: len} straight | {r|l: degrees, rad} arc] with optional
+//                       y        elevation at the end of the segment (eased in)
+//                       hw, sh   half-width / shoulder at the end (eased in)
+//                       wallL, wallR  edges for this segment
+//                       bank     degrees of banking. On arcs it tilts into the turn (negative =
+//                                tilts out); on straights + = right side low. Neighbouring
+//                                segments blend over ~bankBlend units, so a run of banked arcs
+//                                stays banked.
+//                       antigrav true = anti-gravity: wheels fold into hover mode and bumping
+//                                karts or bumpers gives a spin boost
+//                       style    road style for this segment
+//                       adj      (circuits) this straight may stretch to close the loop
+//   bankBlend         units over which banking eases between segments (default 12)
+//
+// Circuits close their loop automatically and are raced for the lobby's lap count. The start
+// line sits startAt units into the first straight.
+//
+// Point-to-point courses (p2p: true) are one run from the top to the finish, split into sections:
+//   p2p: true, startAt (start line, units from the beginning of the walk, default 40),
+//   runout (road left after the finish line, default 50), sections: [{name, music, seg, t}]
+//   (the first section starts at the start line; later ones at {seg, t}), planeDrop: true for
+//   the cargo-plane intro.
+//
+// Placements use {seg, t} = turtle segment index and fraction along it, ds = extra units along,
+// d = units right of the centre line (negative = left). Branch placements use {path, u} =
+// fraction along the branch.
+//   branches   [{id, name, seg, phi}] a shortcut across one big arc, or
+//              [{id, name, from: [seg, t], to: [seg, t], pts: [[u, d, dy, bankDeg], ...]}]
+//              with hw, sh, wallL, wallR, lift, style, antigrav.
+//              gate: 'auto' (or a fraction) = locked by a key gate (a hidden route);
+//              no gate = an open alternative route that anyone may take.
+//   rails      [{seg, t, t1, side}] guard rails over drop edges (side -1 left, 1 right, 0 both)
+//   zones      [{kind, seg, t, t1 | len, d, w, h, flow}] kinds:
+//                boost (pad), ice, mud, shallow (water: slower), ramp (h = lip height),
+//                glide (a ramp that opens the glider), hump (a mogul of height h),
+//                gap (no ground: a chasm), current (water stream: flow = units/s along the road,
+//                negative = against you), antigrav (same as the segment flag)
+//   boxes      [{seg, t, d: [offsets]}] item box rows
+//   coins      [{seg, t, d, n, gap, dd, h}] coin lines
+//   keys       [{seg, t, d, h}] the floating key for the course's locked gate
+//   rings      [{seg, t, ds, d, h, r}] boost rings in the air (h above the road, radius r)
+//   hazards    [{kind, seg, t, d, ...}] moving obstacles, see items.js for each kind's fields
+//   landmarks  [{kind, seg, t, d, ...}] scenery, built by LANDMARKS in world3d.js / js/scenery
+//   staff      {150: seconds, 200: seconds} staff ghost times (shown in the lobby and results)
 
-const TRACK_DEFS = [
-  // =========================================================================
-  {
-    id: 'meadow',
-    name: 'Puffball Circuit',
-    blurb: 'Rolling clay meadows on a floating island. A gentle start, if you can dodge the Mudlets.',
-    music: 'meadow',
-    theme: 'meadow',
-    hw: 8.5, sh: 5, wallL: true, wallR: true,
-    segments: [
-      { s: 92 },                                // 0 start straight
-      { r: 100, rad: 30 },                      // 1 turn one
-      { s: 52, y: 3.5, wallL: false, wallR: false }, // 2 cloud bridge
-      { l: 45, rad: 34, y: 5 },                 // 3 the S
-      { r: 45, rad: 34, y: 5 },                 // 4
-      { s: 40, y: 5 },                          // 5 windmill hill
-      { r: 150, rad: 70, y: 1 },                // 6 Pond Sweeper (hidden route cuts across)
-      { s: 74, y: 0 },                          // 7 jump straight
-      { l: 50, rad: 32, wallR: false },         // 8 island edge
-      { r: 160, rad: 34 },                      // 9 final corner
-    ],
-    branches: [{ id: 'log', name: 'Hollow Log Shortcut', seg: 6, phi: 72, gate: 'auto', hw: 5.5, sh: 2 }],
-    zones: [
-      { kind: 'boost', seg: 0, t: 0.62, len: 6, d: -4, w: 4 },
-      { kind: 'boost', seg: 5, t: 0.45, len: 6, d: 3.5, w: 4 },
-      { kind: 'ramp', seg: 7, t: 0.3, len: 7, d: 0, w: 9, h: 1.7 },
-      { kind: 'boost', path: 'log', u: 0.55, len: 7, d: 0, w: 5 },
-      { kind: 'mud', seg: 9, t: 0.35, len: 16, d: 9.5, w: 5 },
-    ],
-    boxes: [
-      { seg: 1, t: 0.95, d: [-6, -2, 2, 6] },
-      { seg: 5, t: 0.15, d: [-5.5, -1.8, 1.8, 5.5] },
-      { seg: 7, t: 0.75, d: [-6, -2, 2, 6] },
-      { path: 'log', u: 0.42, d: [-2.2, 2.2] },
-    ],
-    coins: [
-      { seg: 0, t: 0.25, d: 3, n: 6, gap: 3 },
-      { seg: 3, t: 0.4, d: -3, n: 5, gap: 3, dd: 1 },
-      { seg: 6, t: 0.4, d: 6, n: 6, gap: 3.2 },
-      { seg: 8, t: 0.2, d: 0, n: 5, gap: 3 },
-      { path: 'log', u: 0.62, d: 0, n: 8, gap: 2.5 },
-    ],
-    keys: [{ seg: 7, t: 0.3, ds: 13.5, d: 0, h: 2.7 }],
-    hazards: [
-      { kind: 'walker', seg: 8, t: 0.45, d: 0, range: 7, speed: 2.4 },
-      { kind: 'walker', seg: 9, t: 0.2, d: -2, range: 6, speed: 2 },
-      { kind: 'walker', seg: 9, t: 0.6, d: 1, range: 7, speed: 2.6 },
-    ],
-    landmarks: [
-      { kind: 'gantry', seg: 0, t: 0 },
-      { kind: 'windmill', seg: 5, t: 0.5, d: -26 },
-      { kind: 'windmill', seg: 0, t: 0.45, d: 34 },
-      { kind: 'bigshroom', seg: 1, t: 0.5, d: 26 },
-      { kind: 'bigshroom', seg: 9, t: 0.55, d: 30 },
-      { kind: 'pond', seg: 6, t: 0.5, d: 74, r: 16 },
-      { kind: 'log', path: 'log' },
-      { kind: 'balloon', seg: 7, t: 0.6, d: -40, h: 22 },
-    ],
-  },
-  // =========================================================================
-  {
-    id: 'sherbet',
-    name: 'Sherbet Slopes',
-    blurb: 'Climb a frosted peak, ski-jump a crevasse and slide across a frozen lake.',
-    music: 'sherbet',
-    theme: 'snow',
-    hw: 8, sh: 5, wallL: true, wallR: true,
-    segments: [
-      { s: 86 },                                // 0 village straight
-      { r: 90, rad: 32 },                       // 1
-      { s: 54, y: 6 },                          // 2 the climb
-      { r: 60, rad: 36, y: 10 },                // 3
-      { s: 34, y: 12.5 },                       // 4 summit
-      { l: 70, rad: 28, y: 12.5, wallR: false }, // 5 summit edge
-      { r: 160, rad: 60, y: 6 },                // 6 Glacier Bend (hidden route cuts across)
-      { s: 92, y: 0.5 },                        // 7 ski jump straight
-      { r: 70, rad: 42, y: 0 },                 // 8 frozen lake
-      { l: 40, rad: 36 },                       // 9
-      { r: 90, rad: 32 },                       // 10
-    ],
-    branches: [{ id: 'cave', name: 'Crystal Cave', seg: 6, phi: 74, gate: 'auto', hw: 5.5, sh: 1.8 }],
-    zones: [
-      { kind: 'boost', seg: 0, t: 0.55, len: 6, d: 4, w: 4 },
-      { kind: 'ice', seg: 1, t: 0.25, len: 22, d: -3, w: 7 },
-      { kind: 'boost', seg: 7, t: 0.36, len: 5, d: 0, w: 6 },
-      { kind: 'ramp', seg: 7, t: 0.42, len: 8, d: 0, w: 40, h: 2.2 },
-      { kind: 'gap', seg: 7, t: 0.42, ds: 9.5, len: 9, d: 0, w: 40 },
-      { kind: 'ice', seg: 8, t: 0, t1: 1, d: 0, w: 40 },
-      { kind: 'ice', path: 'cave', u: 0.2, u1: 0.8, d: 0, w: 20 },
-      { kind: 'boost', path: 'cave', u: 0.48, len: 7, d: 0, w: 5 },
-    ],
-    boxes: [
-      { seg: 1, t: 0.95, d: [-6, -2, 2, 6] },
-      { seg: 4, t: 0.3, d: [-5, -1.6, 1.6, 5] },
-      { seg: 7, t: 0.2, d: [-6, -2, 2, 6] },
-      { seg: 9, t: 0.5, d: [-5, 0, 5] },
-      { path: 'cave', u: 0.36, d: [-2.2, 2.2] },
-    ],
-    coins: [
-      { seg: 0, t: 0.2, d: -3, n: 6, gap: 3 },
-      { seg: 2, t: 0.3, d: 2, n: 5, gap: 3 },
-      { seg: 6, t: 0.35, d: 5, n: 6, gap: 3.2 },
-      { seg: 8, t: 0.3, d: -4, n: 6, gap: 3, dd: 0.8 },
-      { path: 'cave', u: 0.6, d: 0, n: 8, gap: 2.5 },
-    ],
-    keys: [{ seg: 8, t: 0.55, d: -4.6, h: 1.3 }],
-    hazards: [
-      { kind: 'snowman', seg: 7, t: 0.15, d: -3 },
-      { kind: 'snowman', seg: 7, t: 0.8, d: 3.5 },
-      { kind: 'snowman', seg: 10, t: 0.4, d: -1 },
-      { kind: 'snowman', seg: 2, t: 0.6, d: 4 },
-    ],
-    landmarks: [
-      { kind: 'gantry', seg: 0, t: 0 },
-      { kind: 'igloo', seg: 0, t: 0.4, d: -24 },
-      { kind: 'igloo', seg: 0, t: 0.75, d: 26 },
-      { kind: 'icecastle', seg: 4, t: 0.5, d: -40 },
-      { kind: 'cave', path: 'cave' },
-      { kind: 'flag', seg: 4, t: 0.5, d: 12 },
-      { kind: 'bigsnowman', seg: 9, t: 0.5, d: 28 },
-    ],
-  },
-  // =========================================================================
-  {
-    id: 'magma',
-    name: 'Magma Keep',
-    blurb: "King Mudlet's castle over a lava sea. Stompers, fire bars and a rainbow for the brave.",
-    music: 'magma',
-    theme: 'lava',
-    hw: 7.5, sh: 3.5, wallL: true, wallR: true,
-    segments: [
-      { s: 80 },                                // 0 courtyard
-      { r: 90, rad: 24 },                       // 1
-      { s: 60 },                                // 2 stomper hall
-      { l: 90, rad: 24 },                       // 3
-      { s: 40, y: 4.5 },                        // 4 rampart ramp
-      { r: 90, rad: 24, y: 4.5 },               // 5
-      { s: 60, y: 4.5, wallL: false, wallR: false }, // 6 lava bridge
-      { r: 150, rad: 54, y: 0, wallR: false },  // 7 Lava Lake bend (rainbow cuts across)
-      { s: 50 },                                // 8 fire bar corridor
-      { l: 60, rad: 30 },                       // 9
-      { s: 60 },                                // 10 throne hall
-      { r: 90, rad: 26 },                       // 11
-      { s: 108 },                               // 12 the long run (lava pit jump)
-      { r: 90, rad: 26 },                       // 13
-    ],
-    branches: [
-      { id: 'rainbow', name: 'Rainbow Bridge', seg: 7, phi: 70, gate: 'auto', hw: 5.5, sh: 1, wallL: false, wallR: false, lift: 2.5 },
-    ],
-    rails: [
-      { path: 'rainbow', u: 0, u1: 0.24, side: 0 },
-      { path: 'rainbow', u: 0.8, u1: 1, side: 0 },
-      { seg: 7, t: 0, t1: 0.3, side: 1 },
-      { seg: 7, t: 0.72, t1: 1, side: 1 },
-    ],
-    zones: [
-      { kind: 'boost', seg: 0, t: 0.6, len: 6, d: 0, w: 4 },
-      { kind: 'boost', seg: 6, t: 0.2, len: 6, d: -3, w: 4 },
-      { kind: 'boost', seg: 12, t: 0.36, len: 5, d: 0, w: 5 },
-      { kind: 'ramp', seg: 12, t: 0.45, len: 7, d: 0, w: 40, h: 1.6 },
-      { kind: 'gap', seg: 12, t: 0.45, ds: 8.5, len: 8, d: 0, w: 40 },
-      { kind: 'boost', path: 'rainbow', u: 0.3, len: 6, d: 0, w: 5 },
-      { kind: 'boost', path: 'rainbow', u: 0.62, len: 6, d: 0, w: 5 },
-    ],
-    boxes: [
-      { seg: 1, t: 0.9, d: [-5, -1.7, 1.7, 5] },
-      { seg: 5, t: 0.9, d: [-5, -1.7, 1.7, 5] },
-      { seg: 8, t: 0.1, d: [-5, -1.7, 1.7, 5] },
-      { seg: 12, t: 0.15, d: [-5, -1.7, 1.7, 5] },
-      { path: 'rainbow', u: 0.48, d: [-2, 2] },
-    ],
-    coins: [
-      { seg: 0, t: 0.25, d: -3, n: 6, gap: 3 },
-      { seg: 2, t: 0.1, d: 0, n: 4, gap: 3 },
-      { seg: 7, t: 0.35, d: -4, n: 6, gap: 3.2 },
-      { seg: 10, t: 0.3, d: 3, n: 5, gap: 3 },
-      { seg: 12, t: 0.7, d: -2, n: 5, gap: 3 },
-      { path: 'rainbow', u: 0.55, d: 0, n: 8, gap: 2.5 },
-    ],
-    keys: [{ seg: 6, t: 0.55, d: 5.8, h: 1.3 }],
-    hazards: [
-      { kind: 'stomper', seg: 2, t: 0.3, d: -3.5, phase: 0 },
-      { kind: 'stomper', seg: 2, t: 0.55, d: 3, phase: 0.35 },
-      { kind: 'stomper', seg: 2, t: 0.8, d: -1.5, phase: 0.7 },
-      { kind: 'firebar', seg: 8, t: 0.35, d: 0, len: 6, speed: 1.6 },
-      { kind: 'firebar', seg: 8, t: 0.8, d: 0, len: 6, speed: -1.9 },
-      { kind: 'stomper', seg: 10, t: 0.5, d: 2.5, phase: 0.2 },
-    ],
-    landmarks: [
-      { kind: 'gantry', seg: 0, t: 0 },
-      { kind: 'keep', seg: 12, t: 0.5, d: 60 },
-      { kind: 'tower', seg: 1, t: 0.5, d: -18 },
-      { kind: 'tower', seg: 3, t: 0.5, d: 18 },
-      { kind: 'tower', seg: 11, t: 0.5, d: -18 },
-      { kind: 'tower', seg: 13, t: 0.5, d: -18 },
-      { kind: 'volcano', seg: 7, t: 0.5, d: -130 },
-      { kind: 'rainbow', path: 'rainbow' },
-    ],
-  },
-];
+const TRACK_DEFS = [];
+
+// Road surfaces the renderer knows. Physics never reads them: surfaces come from zones.
+const ROAD_STYLES = ['road', 'stone', 'wood', 'ice', 'snow', 'metal', 'water', 'rainbow', 'dirt'];
 
 // Colours and moods per world. Shared by the 3D builder and the phone/garage previews.
 const THEMES = {
@@ -230,5 +87,15 @@ const THEMES = {
     grass: '#5b4a6e', grass2: '#4a3d5c', dirt: '#6b5168', rock: '#3d2f48', wall: '#9a8fb4', wallTop: '#b9addb',
     voidKind: 'lava', lava: '#ff7a2f', lavaHot: '#ffd166',
     decor: ['crystal', 'basalt', 'basalt', 'brazier'], ambient: 'embers',
+  },
+  // A high mountain: deep blue sky, evergreen forests and a valley far below instead of a void.
+  alpine: {
+    sky: ['#3f7fd6', '#9cc8f2', '#eaf4ff'], fog: '#d7e6f5', sun: '#fffbe8',
+    hemiSky: '#eef6ff', hemiGround: '#4a5a6a', sunLight: '#fff6e6',
+    road: '#a9a3b6', roadLine: '#ffd166', curb: ['#e8483f', '#ffffff'], shoulder: '#f2f6fc',
+    grass: '#eef4fc', grass2: '#d9e6f6', dirt: '#b9c6da', rock: '#7c7a8e', wall: '#f7fbff', wallTop: '#ffffff',
+    forest: '#2f6b55', forest2: '#3f8a6a',
+    voidKind: 'valley', valley: '#5d8f6e', cloud: '#ffffff', cloudShade: '#cddcef',
+    decor: ['pine', 'pine', 'pine', 'pine', 'snowrock', 'snowbush'], ambient: 'snow',
   },
 };
