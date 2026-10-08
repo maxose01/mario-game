@@ -231,7 +231,7 @@ class Kart {
       }
       if (this.onGround && this.surface !== 'offroad' && this.surface !== 'mud') {
         const into = Math.max(0, this.steer * this.drift);
-        this.driftT += dt * (0.65 + 0.7 * into) * this.tune.turbo;
+        this.driftT += dt * (0.9 + 0.6 * into) * this.tune.turbo;
       }
       const lvl = this.driftT >= CFG.driftCharge3 ? 3 : this.driftT >= CFG.driftCharge2 ? 2 : this.driftT >= CFG.driftCharge1 ? 1 : 0;
       if (lvl > this.driftLevel) this.race.emit('sparks', this, lvl);

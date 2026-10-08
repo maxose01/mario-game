@@ -121,20 +121,26 @@ class BotBrain {
     this.thinkItems(dt, path, s);
   }
 
-  // Pinned against a wall or a door? Back up for a moment, steering the other way.
+  // Pinned against a wall or a door? Back up for a moment with the wheel turned; if that
+  // gets nowhere either (reversing into something), drive forward on the opposite lock.
   unstick(dt) {
     const k = this.k, c = k.ctl;
     if (Math.abs(k.vf) < 1.6 && k.race.time > 4 && k.controllable && k.onGround) this.stuckT += dt;
     else this.stuckT = Math.max(0, this.stuckT - dt * 2);
     if (this.stuckT > 0.9) {
+      this.unstickFwd = this.reverseT > 0 ? !this.unstickFwd : false;
       this.reverseT = 0.8 + this.rnd() * 0.4;
       this.reverseSteer = this.lastSteer > 0 ? -1 : 1;
+      if (this.unstickFwd) this.reverseSteer = -this.reverseSteer;
       this.stuckT = 0;
     }
-    if (this.reverseT <= 0) return false;
+    if (this.reverseT <= 0) {
+      this.unstickFwd = false;
+      return false;
+    }
     this.reverseT -= dt;
-    c.gas = false;
-    c.brake = true;
+    c.gas = !!this.unstickFwd;
+    c.brake = !this.unstickFwd;
     c.steer = this.reverseSteer;
     c.drift = false;
     c.item = false;

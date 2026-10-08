@@ -23,25 +23,36 @@ const Input = {
   onUiKey: null,
   onNav: null, // (dir | 'ok' | 'back') for menus
 
+  // Some TV browsers leave KeyboardEvent.code empty; fall back to key / keyCode.
+  codeOf(e) {
+    if (e.code) return e.code;
+    const byKey = { ArrowUp: 'ArrowUp', ArrowDown: 'ArrowDown', ArrowLeft: 'ArrowLeft', ArrowRight: 'ArrowRight', Enter: 'Enter', ' ': 'Space', Escape: 'Escape', Backspace: 'Backspace' };
+    if (byKey[e.key]) return byKey[e.key];
+    const byCode = { 37: 'ArrowLeft', 38: 'ArrowUp', 39: 'ArrowRight', 40: 'ArrowDown', 13: 'Enter', 32: 'Space', 27: 'Escape', 461: 'Escape', 10009: 'Escape', 8: 'Backspace' };
+    return byCode[e.keyCode] || e.key || '';
+  },
+
   init() {
     window.addEventListener('keydown', (e) => {
       if (this.isTyping(e)) return;
-      if (this.onUiKey && this.onUiKey(e.code, e)) {
+      const code = this.codeOf(e);
+      if (this.onUiKey && this.onUiKey(code, e)) {
         e.preventDefault();
         return;
       }
-      if (!this.keys.has(e.code)) {
-        for (const src in KEYSETS) for (const a in KEYSETS[src]) if (KEYSETS[src][a].includes(e.code)) this.latch.add(src + ':' + a);
-        this.navKey(e);
+      if (!this.keys.has(code)) {
+        for (const src in KEYSETS) for (const a in KEYSETS[src]) if (KEYSETS[src][a].includes(code)) this.latch.add(src + ':' + a);
+        this.navKey(e, code);
       }
-      this.keys.add(e.code);
-      if (this.isGameKey(e.code) && !this.inMenu()) e.preventDefault();
+      this.keys.add(code);
+      if (this.isGameKey(code) && !this.inMenu()) e.preventDefault();
       Sound.init();
       Sound.resume();
     });
     window.addEventListener('keyup', (e) => {
-      this.keys.delete(e.code);
-      if (this.isGameKey(e.code) && !this.isTyping(e) && !this.inMenu()) e.preventDefault();
+      const code = this.codeOf(e);
+      this.keys.delete(code);
+      if (this.isGameKey(code) && !this.isTyping(e) && !this.inMenu()) e.preventDefault();
     });
     window.addEventListener('blur', () => this.keys.clear());
     window.addEventListener('pointerdown', () => {
@@ -61,10 +72,10 @@ const Input = {
   inMenu() {
     return document.body.classList.contains('menu-open');
   },
-  navKey(e) {
+  navKey(e, code) {
     if (!this.onNav) return;
     const map = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Enter: 'ok', NumpadEnter: 'ok', Escape: 'back', Backspace: 'back', BrowserBack: 'back', GoBack: 'back' };
-    const d = map[e.code] || (e.key === 'GoBack' ? 'back' : null);
+    const d = map[code] || (e.key === 'GoBack' ? 'back' : null);
     if (d && this.onNav(d, e)) e.preventDefault();
   },
 
