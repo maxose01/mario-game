@@ -47,9 +47,7 @@ class World3D {
   }
 
   dispose() {
-    this.scene.traverse((o) => {
-      if (o.geometry) o.geometry.dispose();
-    });
+    disposeScene(this.scene);
     for (const d of this.disposables) if (d && d.dispose) d.dispose();
   }
 
@@ -114,7 +112,9 @@ class World3D {
         parts.push(GK.at(GK.blob(w * (0.32 + rnd() * 0.18), w * (0.22 + rnd() * 0.1), w * 0.3, cloudCol, { seed: i * 9 + k, lump: 3, ws: 10, hs: 8 }), cx - Math.sin(a) * t * w * 1.1, cy + Math.sin((k / 4) * Math.PI) * w * 0.12, cz + Math.cos(a) * t * w * 1.1));
       }
     }
-    const cm = this.keep(Clay3D.material({ vertexColors: true, wobble: 0, fog: false, rim: 0.4, bump: false }));
+    // sky clouds glow a little with the sky's colour so they never go grey in shadow
+    const glow = new THREE.Color(th.sky[1]).lerp(new THREE.Color(cloudCol), 0.4);
+    const cm = this.keep(Clay3D.material({ vertexColors: true, wobble: 0, fog: false, rim: 0.25, bump: false, emissive: glow, emissiveIntensity: 0.55 }));
     const clouds = new THREE.Mesh(GK.merge(parts), cm);
     this.keep(clouds.geometry);
     sky.add(clouds);

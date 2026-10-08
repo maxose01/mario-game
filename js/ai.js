@@ -173,6 +173,11 @@ class BotBrain {
   // Take a hidden route when carrying a key (or when its gate stands open).
   chooseRoute() {
     const k = this.k, T = k.track, items = k.race.items;
+    // already through a gate (slipped in behind someone, or rescued onto the route)? follow it
+    if (!this.route && k.path && k.path.branch) {
+      const g = items.gates.find((q) => q.path === k.path);
+      if (!g || k.loc.i >= g.i) this.route = k.path;
+    }
     if (this.route) {
       const br = this.route;
       const gate = items.gates.find((g) => g.path === br);

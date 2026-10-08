@@ -26,6 +26,18 @@ const CHARACTERS = [
     col: { skin: '#cddc6c', main: '#ec7d8c', second: '#ffd166', accent: '#b25a6a', hair: '#9fb04a' },
   },
   {
+    id: 'sprout', name: 'Sprout', price: 0, size: 'Light',
+    blurb: 'A mushroom kid from the item blocks. Quick hands, quicker turbos.',
+    stats: { speed: 2.75, accel: 3.5, weight: 2.25, handling: 3.5, traction: 3.25, turbo: 3.75 },
+    col: { skin: '#ffe3c4', main: '#e8483f', second: '#ffffff', accent: '#3d6fd6', hair: '#fff1d6' },
+  },
+  {
+    id: 'puff', name: 'Puff', price: 40, size: 'Light',
+    blurb: 'A drifting cloud with rosy cheeks. Floats over bumps, sticks to the road.',
+    stats: { speed: 2.5, accel: 3.75, weight: 1.75, handling: 4, traction: 3.75, turbo: 3.25 },
+    col: { skin: '#f4ecff', main: '#ffb3d1', second: '#c9b8ff', accent: '#9b86d6', hair: '#ffffff' },
+  },
+  {
     id: 'thornbun', name: 'Thornbun', price: 60, size: 'Medium',
     blurb: 'A prickly bunny. Bump into it at your own risk.',
     stats: { speed: 2.75, accel: 3.5, weight: 2.75, handling: 3.5, traction: 2.75, turbo: 3.75 },
@@ -136,8 +148,9 @@ function kartTuning(cfg) {
 // A random but stylish config for a bot.
 function randomKart(rnd, avoid) {
   const pick = (list) => list[Math.floor(rnd() * list.length)];
-  let ch = pick(CHARACTERS);
-  for (let i = 0; i < 6 && avoid && avoid.includes(ch.id); i++) ch = pick(CHARACTERS);
+  // prefer racers nobody on the grid has picked yet
+  const fresh = avoid ? CHARACTERS.filter((c) => !avoid.includes(c.id)) : CHARACTERS;
+  const ch = pick(fresh.length ? fresh : CHARACTERS);
   return { character: ch.id, body: pick(BODIES).id, wheels: pick(WHEELS).id, paint: pick(PAINTS.filter((p) => !p.special)).id };
 }
 

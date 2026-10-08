@@ -296,3 +296,11 @@ function fbm2(x, z, oct = 3) {
   }
   return a / (1 - Math.pow(0.5, oct));
 }
+
+// Free a scene's GPU memory, skipping geometry and materials shared between scenes.
+function disposeScene(scene) {
+  scene.traverse((o) => {
+    if (o.geometry && !(o.geometry.userData && o.geometry.userData.shared)) o.geometry.dispose();
+    if (o.material) for (const m of [].concat(o.material)) if (!(m.userData && m.userData.shared)) m.dispose();
+  });
+}

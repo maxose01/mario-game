@@ -55,6 +55,7 @@ const KartModels = {
       wheelPos: BODY_WHEELS[cfg.body] || BODY_WHEELS.classic,
       lift,
     };
+    for (const k of ['paint', 'detail', 'head', 'wheel']) g[k].userData.shared = true;
     KART_GEO_CACHE.set(key, g);
     return g;
   },
@@ -95,6 +96,7 @@ const KartModels = {
   },
 };
 const SHADOW_GEO = new THREE.PlaneGeometry(3.4, 2.4).rotateX(-Math.PI / 2);
+SHADOW_GEO.userData.shared = true;
 
 // Where each body puts its seat and wheels.
 const BODY_SEAT = {
@@ -209,6 +211,17 @@ function buildDriver(ch, B, H) {
     B.push(at(GK.blob(0.62, 0.55, 0.58, c.skin, { seed: 131 }), 0, 0.5, 0));
     B.push(at(GK.box(0.2, 0.9, 1.1, c.second, { seed: 132 }), -0.45, 0.6, 0, 0, 0, 0.15));
     for (const s of [-1, 1]) B.push(at(GK.blob(0.4, 0.16, 0.16, c.skin, { seed: 133 + s }), 0.42, 0.55, s * 0.36, 0, s * 0.3, 0));
+  } else if (id === 'sprout') {
+    B.push(at(GK.blob(0.36, 0.4, 0.36, c.accent, { seed: 241 }), 0, 0.42, 0));
+    B.push(at(GK.blob(0.22, 0.26, 0.24, c.skin, { seed: 242 }), 0.14, 0.4, 0));
+    for (const s of [-1, 1]) B.push(at(GK.blob(0.32, 0.11, 0.11, c.skin, { seed: 243 + s }), 0.38, 0.55, s * 0.28, 0, s * 0.3, 0));
+  } else if (id === 'puff') {
+    B.push(at(GK.blob(0.5, 0.42, 0.5, c.skin, { seed: 251 }), 0, 0.4, 0));
+    for (let k = 0; k < 4; k++) {
+      const a = (k / 4) * TAU + 0.4;
+      B.push(at(GK.blob(0.26, 0.22, 0.26, k % 2 ? c.hair : c.skin, { seed: 252 + k }), Math.cos(a) * 0.4, 0.3, Math.sin(a) * 0.4));
+    }
+    for (const s of [-1, 1]) B.push(at(GK.blob(0.3, 0.15, 0.15, c.skin, { seed: 257 + s }), 0.4, 0.55, s * 0.32, 0, s * 0.3, 0));
   } else if (id === 'thornbun') {
     B.push(at(GK.blob(0.44, 0.48, 0.42, c.skin, { seed: 141 }), 0, 0.45, 0));
     B.push(at(GK.blob(0.28, 0.32, 0.3, c.second, { seed: 142 }), 0.2, 0.42, 0));
@@ -262,6 +275,25 @@ function buildDriver(ch, B, H) {
     eye(0.36, 0.1, -0.16, 0.12);
     for (const s of [-1, 1]) H.push(at(GK.box(0.06, 0.06, 0.22, '#5b3524', { seed: 211 + s, lump: 0 }), 0.42, 0.26, s * 0.16, s * 0.4, 0, 0));
     H.push(at(GK.blob(0.06, 0.05, 0.2, '#5b3524', { seed: 214, lump: 0 }), 0.44, -0.18, 0));
+  } else if (id === 'sprout') {
+    H.push(GK.blob(0.3, 0.3, 0.3, c.skin, { seed: 261 }));
+    H.push(at(GK.blob(0.52, 0.32, 0.52, c.main, { seed: 262 }), -0.02, 0.3, 0));
+    for (let k = 0; k < 5; k++) {
+      const a = (k / 5) * TAU;
+      H.push(at(GK.blob(0.12, 0.08, 0.12, c.second, { seed: 263 + k, lump: 0 }), Math.cos(a) * 0.32, 0.5, Math.sin(a) * 0.32));
+    }
+    H.push(at(GK.blob(0.12, 0.1, 0.12, c.second, { seed: 269, lump: 0 }), 0, 0.62, 0));
+    eye(0.22, 0.02, 0.11, 0.1);
+    eye(0.22, 0.02, -0.11, 0.1);
+  } else if (id === 'puff') {
+    H.push(GK.blob(0.42, 0.36, 0.42, c.skin, { seed: 271 }));
+    for (let k = 0; k < 5; k++) {
+      const a = (k / 5) * Math.PI;
+      H.push(at(GK.blob(0.2, 0.18, 0.2, c.hair, { seed: 272 + k }), -0.1 + Math.cos(a) * 0.05, 0.28 + Math.sin(a) * 0.08, (k - 2) * 0.16));
+    }
+    for (const s of [-1, 1]) H.push(at(GK.blob(0.08, 0.06, 0.04, c.main, { seed: 278 + s, lump: 0 }), 0.36, -0.08, s * 0.2));
+    eye(0.32, 0.06, 0.12, 0.1);
+    eye(0.32, 0.06, -0.12, 0.1);
   } else if (id === 'thornbun') {
     H.push(GK.blob(0.36, 0.34, 0.34, c.skin, { seed: 221 }));
     for (const s of [-1, 1]) {

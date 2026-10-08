@@ -1,7 +1,7 @@
 'use strict';
 // Everything you hear is synthesized with WebAudio: no audio files.
-// Sound effects are short oscillator/noise recipes; music is a tiny step sequencer
-// playing original tunes, with a bongo layer that joins in while you ride Dumpling.
+// Sound effects are short oscillator/noise recipes, music is a tiny step sequencer playing
+// original tunes (one per world), and each local racer gets a little engine hum.
 
 const NOTE_INDEX = { C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, F: 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11 };
 function noteFreq(n) {
@@ -16,49 +16,43 @@ function parseTrack(s) {
 
 // Tunes: one token per eighth note. "-" holds the previous note, "." is a rest.
 const SONGS = {
-  map: {
-    bpm: 104,
-    lead: 'A4 . C5 . F5 - E5 . | D5 . C5 . A4 - - . | Bb4 . D5 . F5 - G5 . | A5 - - . . . . . | A5 . G5 . F5 . D5 . | C5 . D5 . F5 - . . | G5 . E5 . C5 . E5 . | F5 - - . . . . .',
-    bass: 'F2 . C3 . F2 . C3 . | D2 . A2 . D2 . A2 . | Bb1 . F2 . Bb1 . F2 . | C2 . G2 . C2 . G2 . | F2 . C3 . D2 . A2 . | Bb1 . F2 . Bb1 . F2 . | C2 . G2 . C2 . E2 . | F2 . C3 . F2 . . .',
-    drums: 'k...h...',
+  title: {
+    bpm: 128,
+    lead: 'C5 . E5 . G5 . C6 - | B5 . G5 . E5 . D5 . | F5 . A5 . C6 . A5 . | G5 - - . E5 . G5 . | A5 . F5 . D5 . F5 . | E5 . C5 . G4 . C5 . | D5 . F5 . A5 . G5 . | C6 - - - . . . .',
+    bass: 'C3 . G2 . C3 . G2 . | E2 . B2 . E2 . G2 . | F2 . C3 . F2 . C3 . | G2 . D3 . G2 . B2 . | D3 . A2 . D3 . A2 . | C3 . G2 . E2 . G2 . | G2 . D3 . G2 . B2 . | C3 . G2 . C3 . . .',
+    drums: 'k.h.s.h.',
     lead2: 0.35,
   },
+  lobby: {
+    bpm: 108,
+    lead: 'E5 . G5 . A5 . G5 . | E5 - D5 . C5 . . . | D5 . E5 . G5 . E5 . | D5 - - . . . . . | E5 . G5 . A5 . C6 . | B5 - G5 . E5 . . . | D5 . E5 . D5 . B4 . | C5 - - - . . . .',
+    bass: 'C3 . . . G2 . . . | A2 . . . E2 . . . | F2 . . . C3 . . . | G2 . . . D3 . . . | C3 . . . G2 . . . | E2 . . . A2 . . . | F2 . . . G2 . . . | C3 . G2 . C3 . . .',
+    drums: 'k...s...',
+    lead2: 0.4,
+  },
   meadow: {
-    bpm: 132,
-    lead: 'E5 . G5 . C6 - B5 A5 | G5 - E5 . C5 . D5 E5 | F5 . A5 . C6 - B5 A5 | G5 - - - . . . . | E5 . G5 . C6 - D6 E6 | D6 - C6 . A5 . G5 A5 | F5 . E5 . D5 . G5 . | C5 - - - . . . .',
-    bass: 'C3 . G3 . C3 . G3 . | A2 . E3 . A2 . E3 . | F2 . C3 . F2 . C3 . | G2 . D3 . G2 . B2 . | C3 . G3 . C3 . G3 . | F2 . C3 . F2 . A2 . | D3 . A2 . G2 . B2 . | C3 . G2 . C3 . . .',
-    drums: 'k.h.s.h.',
+    bpm: 150,
+    lead: 'G5 . A5 B5 . D6 . B5 | C6 . A5 . G5 . E5 . | F5 . A5 . C6 . E6 . | D6 - - . . . B5 . | C6 . B5 A5 . G5 . E5 | F5 . E5 . D5 . G5 . | A5 . B5 . C6 . D6 . | G5 - - - . . . .',
+    bass: 'G2 . D3 . G2 . D3 . | A2 . E3 . A2 . C3 . | F2 . C3 . F2 . A2 . | G2 . D3 . G2 . B2 . | C3 . G2 . C3 . E3 . | D3 . A2 . D3 . F#2 . | G2 . D3 . E3 . F#3 . | G2 . D3 . G2 . . .',
+    drums: 'k.hsk.hs',
     lead2: 0.3,
   },
-  glade: {
-    bpm: 144,
-    lead: 'D5 . G5 . B5 . A5 G5 | A5 - F#5 . D5 . . . | E5 . A5 . C6 . B5 A5 | B5 - G5 . D5 . . . | G5 A5 B5 . D6 . B5 . | C6 B5 A5 . F#5 . A5 . | G5 . B5 . A5 . F#5 . | G5 - - - . . . .',
-    bass: 'G2 . D3 . G2 . D3 . | D3 . A2 . D3 . F#2 . | C3 . G2 . C3 . E3 . | G2 . D3 . G2 . B2 . | E3 . B2 . E3 . B2 . | C3 . G2 . D3 . A2 . | G2 . E3 . D3 . D2 . | G2 . D3 . G2 . . .',
-    drums: 'k.hhs.h.',
-    lead2: 0.25,
+  sherbet: {
+    bpm: 140,
+    lead: 'E6 . B5 . G5 . E5 . | F#5 . G5 . A5 . B5 . | C6 . A5 . E5 . C5 . | D5 - - . . . . . | E5 . G5 . B5 . E6 . | D6 . C6 . B5 . A5 . | G5 . F#5 . E5 . D#5 . | E5 - - - . . . .',
+    bass: 'E2 . B2 . E3 . B2 . | D2 . A2 . D3 . A2 . | C2 . G2 . C3 . G2 . | B1 . F#2 . B2 . F#2 . | E2 . B2 . E3 . B2 . | A2 . E3 . A2 . E3 . | B1 . F#2 . B2 . D#3 . | E2 . B2 . E2 . . .',
+    drums: 'k.h.shh.',
+    lead2: 0.5,
+    leadType: 'sine',
   },
-  keep: {
-    bpm: 120,
-    lead: 'D5 . F5 . A5 . G5 F5 | E5 - C5 . A4 . . . | D5 . F5 . A5 . C6 A5 | Bb5 - A5 . G5 . . . | F5 . G5 . A5 . D6 . | C6 . Bb5 . A5 . G5 . | F5 . E5 . D5 . C#5 . | D5 - - - . . . .',
-    bass: 'D2 . A2 . D2 . A2 . | C2 . G2 . A1 . E2 . | D2 . A2 . F2 . A2 . | G1 . D2 . G2 . . . | Bb1 . F2 . Bb1 . F2 . | C2 . G2 . C2 . E2 . | A1 . E2 . A1 . C#2 . | D2 . A1 . D2 . . .',
-    drums: 'k..hk.s.',
+  magma: {
+    bpm: 156,
+    lead: 'D5 D5 F5 D5 A5 . G5 F5 | E5 E5 G5 E5 Bb5 . A5 G5 | F5 . A5 . D6 . C6 . | A5 - - . G5 . F5 . | D5 D5 F5 D5 A5 . G5 F5 | E5 . G5 . C6 . Bb5 . | A5 . G5 . F5 . E5 . | D5 - - - . . . .',
+    bass: 'D2 . D3 . D2 . D3 . | C2 . C3 . C2 . C3 . | Bb1 . Bb2 . Bb1 . Bb2 . | A1 . A2 . A1 . C#3 . | D2 . D3 . D2 . D3 . | C2 . C3 . C2 . E2 . | F2 . E2 . D2 . C#2 . | D2 . A1 . D2 . . .',
+    drums: 'k.sk.ks.',
     lead2: 0.2,
   },
-  palace: {
-    bpm: 150,
-    lead: 'C6 E6 G6 E6 C6 E6 G6 E6 | D6 F6 A6 F6 D6 F6 A6 F6 | E6 G6 C7 G6 E6 G6 C7 G6 | D6 - G5 - C6 - - -',
-    bass: 'C3 . C3 . G2 . G2 . | D3 . D3 . A2 . A2 . | E3 . E3 . C3 . C3 . | G2 . G2 . C3 . . .',
-    drums: 'k.h.k.h.',
-    lead2: 0.2,
-  },
-  boss: {
-    bpm: 160,
-    lead: 'A4 A4 C5 A4 E5 A4 D5 C5 | A4 A4 C5 A4 F5 E5 D5 C5 | G4 G4 B4 G4 D5 G4 C5 B4 | E5 - D5 - C5 - B4 -',
-    bass: 'A1 . A2 . A1 . A2 . | F1 . F2 . F1 . F2 . | G1 . G2 . G1 . G2 . | E1 . E2 . E1 . G#1 .',
-    drums: 'k.s.k.s.',
-    lead2: 0.15,
-  },
-  ending: {
+  results: {
     bpm: 120,
     lead: 'C5 . E5 . G5 . C6 . | B5 . G5 . D5 . G5 . | A5 . F5 . C5 . F5 . | G5 - - - C6 - - -',
     bass: 'C3 . G2 . C3 . G2 . | G2 . D3 . G2 . D3 . | F2 . C3 . F2 . C3 . | G2 . G2 . C3 . . .',
@@ -66,12 +60,11 @@ const SONGS = {
     lead2: 0.35,
   },
   star: {
-    bpm: 88,
-    lead: 'E5 . B5 . G#5 . E6 . | D#6 . B5 . F#5 . . . | C#6 . A5 . E5 . A5 . | B5 - - - . . . .',
-    bass: 'E3 . . . B2 . . . | B2 . . . F#2 . . . | A2 . . . E2 . . . | B2 . . . E3 . . .',
-    drums: '........',
-    lead2: 0.5,
-    leadType: 'sine',
+    bpm: 190,
+    lead: 'C6 . C6 . C6 . D6 C6 | . C6 . D6 C6 . C6 . | B5 . B5 . B5 . C6 B5 | . B5 . C6 B5 . B5 .',
+    bass: 'C3 G3 C3 G3 C3 G3 C3 G3 | C3 G3 C3 G3 C3 G3 C3 G3 | B2 G3 B2 G3 B2 G3 B2 G3 | B2 G3 B2 G3 B2 G3 B2 G3',
+    drums: 'k.s.k.s.',
+    lead2: 0.3,
   },
 };
 for (const k in SONGS) {
@@ -292,98 +285,115 @@ const Sound = {
 };
 
 const SFX = {
-  jump: (s) => s.tone(280, 0.16, { type: 'square', slide: 620, vol: 0.09 }),
-  spin: (s) => {
-    s.tone(420, 0.22, { type: 'triangle', slide: 1100, vol: 0.12 });
-    s.noise(0.2, { filter: 'bandpass', freq: 900, slide: 3000, vol: 0.12 });
+  select: (s) => s.tone(990, 0.06, { type: 'triangle', vol: 0.12 }),
+  back: (s) => s.tone(520, 0.08, { type: 'triangle', vol: 0.1, slide: 380 }),
+  count: (s) => s.tone(660, 0.22, { type: 'square', vol: 0.09 }),
+  go: (s) => s.tone(1320, 0.5, { type: 'square', vol: 0.09 }),
+  hop: (s) => s.tone(300, 0.1, { type: 'triangle', slide: 520, vol: 0.08 }),
+  sparks1: (s) => s.tone(1400, 0.08, { type: 'triangle', vol: 0.05 }),
+  sparks2: (s) => s.tone(1700, 0.08, { type: 'triangle', vol: 0.06 }),
+  sparks3: (s) => s.tone(2100, 0.1, { type: 'triangle', vol: 0.07 }),
+  boost: (s) => {
+    s.noise(0.45, { filter: 'bandpass', freq: 400, slide: 2400, vol: 0.18, q: 1.5 });
+    s.tone(220, 0.35, { type: 'sawtooth', slide: 660, vol: 0.05 });
+  },
+  box: (s) => {
+    s.noise(0.12, { freq: 3000, vol: 0.12 });
+    s.arp(['E6', 'G6', 'C7'], 0.04, { type: 'triangle', vol: 0.08, len: 0.08 });
+  },
+  roulette: (s) => s.tone(1200 + Math.random() * 400, 0.03, { type: 'square', vol: 0.03 }),
+  itemget: (s) => s.arp(['C6', 'G6'], 0.06, { type: 'triangle', vol: 0.1, len: 0.12 }),
+  throw: (s) => s.noise(0.15, { filter: 'bandpass', freq: 900, slide: 300, vol: 0.14 }),
+  hit: (s) => {
+    s.tone(420, 0.35, { type: 'square', slide: 90, vol: 0.12 });
+    s.noise(0.3, { freq: 1200, slide: 200, vol: 0.2 });
+  },
+  slip: (s) => s.tone(900, 0.4, { type: 'sine', slide: 200, vol: 0.18 }),
+  squish: (s) => {
+    s.tone(160, 0.3, { type: 'sine', slide: 50, vol: 0.3 });
+    s.noise(0.2, { freq: 400, vol: 0.2 });
   },
   coin: (s) => {
-    s.tone(988, 0.08, { type: 'square', vol: 0.08 });
-    s.tone(1319, 0.28, { type: 'square', vol: 0.08, delay: 0.07 });
+    s.tone(988, 0.07, { type: 'square', vol: 0.06 });
+    s.tone(1319, 0.2, { type: 'square', vol: 0.06, delay: 0.06 });
+  },
+  coinloss: (s) => s.arp(['E6', 'C6', 'A5'], 0.05, { type: 'square', vol: 0.05, len: 0.08 }),
+  key: (s) => s.arp(['A5', 'C#6', 'E6', 'A6'], 0.06, { type: 'triangle', vol: 0.13, len: 0.16 }),
+  gate: (s) => {
+    s.noise(0.3, { freq: 2500, slide: 300, vol: 0.15 });
+    s.arp(['C5', 'E5', 'G5', 'B5', 'D6', 'F#6', 'A6', 'C7'], 0.08, { type: 'triangle', vol: 0.12, len: 0.4 });
+  },
+  locked: (s) => {
+    s.tone(140, 0.2, { type: 'square', slide: 90, vol: 0.12 });
+    s.tone(120, 0.2, { type: 'square', slide: 80, vol: 0.1, delay: 0.12 });
+  },
+  lap: (s) => s.arp(['G5', 'C6', 'E6'], 0.08, { type: 'triangle', vol: 0.13, len: 0.2 }),
+  finallap: (s) => s.arp(['C6', 'C6', 'C6', 'G5', 'A5', 'B5', 'C6'], 0.09, { type: 'square', vol: 0.06, len: 0.14 }),
+  finish: (s) => s.arp(['G4', 'C5', 'E5', 'G5', 'C6', 'E6', 'G6', '.', 'E6', '.', 'G6'], 0.09, { type: 'square', vol: 0.07, len: 0.18 }),
+  bump: (s) => {
+    s.tone(110, 0.12, { type: 'triangle', slide: 70, vol: 0.25 });
+    s.noise(0.06, { freq: 600, vol: 0.12 });
+  },
+  wall: (s) => {
+    s.tone(90, 0.15, { type: 'square', slide: 50, vol: 0.12 });
+    s.noise(0.1, { freq: 500, vol: 0.18 });
+  },
+  land: (s) => s.noise(0.12, { freq: 400, slide: 120, vol: 0.18 }),
+  fall: (s) => s.tone(900, 0.8, { type: 'sine', slide: 120, vol: 0.14 }),
+  respawn: (s) => s.arp(['C5', 'E5', 'G5'], 0.06, { type: 'triangle', vol: 0.1 }),
+  star: (s) => s.arp(['C6', 'E6', 'G6', 'C7'], 0.05, { type: 'triangle', vol: 0.1 }),
+  blast: (s) => {
+    s.noise(0.7, { freq: 900, slide: 60, vol: 0.4 });
+    s.tone(80, 0.5, { type: 'sine', slide: 30, vol: 0.4 });
   },
   stomp: (s) => {
-    s.tone(240, 0.14, { type: 'square', slide: 70, vol: 0.14 });
-    s.noise(0.08, { freq: 600, vol: 0.15 });
+    s.noise(0.35, { freq: 260, slide: 60, vol: 0.32 });
+    s.tone(60, 0.3, { type: 'sine', slide: 35, vol: 0.3 });
   },
-  squish: (s) => {
-    s.tone(180, 0.18, { type: 'sine', slide: 60, vol: 0.25 });
-    s.noise(0.1, { freq: 400, vol: 0.18 });
+  trick: (s) => s.arp(['G5', 'D6'], 0.05, { type: 'triangle', vol: 0.1 }),
+  rocket: (s) => s.arp(['C6', 'G6', 'C7'], 0.04, { type: 'square', vol: 0.06 }),
+  stall: (s) => s.noise(0.5, { freq: 300, vol: 0.2 }),
+  buy: (s) => {
+    s.arp(['E6', 'G6', 'C7'], 0.05, { type: 'square', vol: 0.06, len: 0.1 });
+    s.noise(0.08, { freq: 5000, vol: 0.08, delay: 0.15 });
   },
-  bump: (s) => {
-    s.tone(120, 0.09, { type: 'triangle', slide: 70, vol: 0.25 });
-    s.noise(0.05, { freq: 500, vol: 0.12 });
-  },
-  break: (s) => {
-    s.noise(0.3, { freq: 1500, slide: 200, vol: 0.3 });
-    s.tone(160, 0.15, { type: 'square', slide: 50, vol: 0.1 });
-  },
-  sprout: (s) => s.arp(['G4', 'C5', 'E5', 'G5'], 0.05, { type: 'triangle', vol: 0.12, len: 0.12 }),
-  powerup: (s) => s.arp(['C5', 'E5', 'G5', 'C6', 'E6', 'G6'], 0.055, { type: 'square', vol: 0.07, len: 0.1 }),
-  feather: (s) => {
-    s.noise(0.4, { filter: 'bandpass', freq: 500, slide: 4000, vol: 0.12 });
-    s.arp(['E5', 'A5', 'C#6', 'E6'], 0.07, { type: 'triangle', vol: 0.12 });
-  },
-  shrink: (s) => s.arp(['G5', 'E5', 'C5', 'G4'], 0.06, { type: 'square', vol: 0.08, len: 0.1 }),
-  oneup: (s) => s.arp(['E5', 'G5', 'E6', 'C6', 'D6', 'G6'], 0.08, { type: 'square', vol: 0.07, len: 0.12 }),
-  kick: (s) => s.tone(700, 0.1, { type: 'square', slide: 200, vol: 0.1 }),
-  tongue: (s) => s.tone(500, 0.1, { type: 'sine', slide: 1400, vol: 0.18 }),
-  gulp: (s) => {
-    s.tone(320, 0.18, { type: 'sine', slide: 110, vol: 0.25 });
-    s.tone(200, 0.1, { type: 'sine', slide: 90, vol: 0.2, delay: 0.12 });
-  },
-  mount: (s) => {
-    s.tone(660, 0.08, { type: 'triangle', vol: 0.18 });
-    s.tone(990, 0.12, { type: 'triangle', vol: 0.18, delay: 0.08 });
-  },
-  hatch: (s) => {
-    s.noise(0.12, { freq: 2500, vol: 0.15 });
-    s.arp(['C5', 'G5', 'C6'], 0.08, { type: 'triangle', vol: 0.15 });
-  },
-  ouch: (s) => s.tone(520, 0.25, { type: 'square', slide: 160, vol: 0.12 }),
-  key: (s) => s.arp(['A5', 'C#6', 'E6', 'A6'], 0.05, { type: 'triangle', vol: 0.12, len: 0.15 }),
-  unlock: (s) => {
-    s.noise(0.25, { freq: 3000, slide: 300, vol: 0.15 });
-    s.arp(['E6', 'B5', 'G#5'], 0.05, { type: 'triangle', vol: 0.12 });
-  },
-  secret: (s) => s.arp(['C5', 'E5', 'G5', 'B5', 'D6', 'F#6', 'A6', 'C7'], 0.11, { type: 'triangle', vol: 0.14, len: 0.6 }),
-  spring: (s) => s.tone(130, 0.35, { type: 'sine', slide: 700, vol: 0.3 }),
-  cape: (s) => s.noise(0.22, { filter: 'bandpass', freq: 600, slide: 2600, vol: 0.16, q: 2 }),
-  takeoff: (s) => {
-    s.noise(0.5, { filter: 'bandpass', freq: 300, slide: 2500, vol: 0.14 });
-    s.tone(300, 0.4, { type: 'triangle', slide: 900, vol: 0.08 });
-  },
-  boom: (s) => {
-    s.noise(0.35, { freq: 500, slide: 80, vol: 0.35 });
-    s.tone(90, 0.25, { type: 'sine', slide: 40, vol: 0.3 });
-  },
-  pound: (s) => {
-    s.noise(0.45, { freq: 300, slide: 60, vol: 0.45 });
-    s.tone(70, 0.4, { type: 'sine', slide: 35, vol: 0.4 });
-  },
-  death: (s) => s.arp(['B4', 'F5', '.', 'F5', 'F5', 'E5', 'D5', 'C5'], 0.14, { type: 'square', vol: 0.08, len: 0.2 }),
-  clear: (s) => s.arp(['G4', 'C5', 'E5', 'G5', 'C6', 'E6', 'G6', '.', 'E6', '.', 'G6'], 0.1, { type: 'square', vol: 0.07, len: 0.18 }),
-  tape: (s) => s.arp(['C6', 'E6', 'G6', 'C7'], 0.04, { type: 'triangle', vol: 0.12 }),
-  checkpoint: (s) => s.arp(['G5', 'C6', 'E6'], 0.07, { type: 'triangle', vol: 0.14, len: 0.25 }),
-  pause: (s) => {
-    s.tone(880, 0.06, { type: 'square', vol: 0.06 });
-    s.tone(660, 0.1, { type: 'square', vol: 0.06, delay: 0.07 });
-  },
-  message: (s) => s.tone(740, 0.08, { type: 'triangle', vol: 0.12 }),
-  select: (s) => s.tone(990, 0.06, { type: 'triangle', vol: 0.12 }),
-  step: (s) => s.tone(1200, 0.025, { type: 'triangle', vol: 0.05 }),
+  join: (s) => s.arp(['C5', 'G5', 'C6', 'E6'], 0.06, { type: 'triangle', vol: 0.12, len: 0.14 }),
+  ready: (s) => s.arp(['E5', 'A5'], 0.07, { type: 'triangle', vol: 0.12, len: 0.12 }),
   pop: (s) => s.tone(500 + Math.random() * 400, 0.07, { type: 'sine', slide: 1400, vol: 0.18 }),
-  thunder: (s) => s.noise(1.6, { freq: 220, slide: 50, vol: 0.3, attack: 0.05 }),
-  bosshit: (s) => {
-    s.tone(220, 0.3, { type: 'square', slide: 55, vol: 0.14 });
-    s.noise(0.3, { freq: 900, slide: 100, vol: 0.25 });
+  poof: (s) => s.noise(0.15, { freq: 1500, slide: 400, vol: 0.12 }),
+};
+
+// Engine hum, one voice per local camera: a low sawtooth through a lowpass, pitched by speed.
+const Engines = {
+  voices: [],
+  set(i, on, speed01, boost) {
+    const c = Sound.ctx;
+    if (!c) return;
+    let v = this.voices[i];
+    if (!v) {
+      const osc = c.createOscillator(), osc2 = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain();
+      osc.type = 'sawtooth';
+      osc2.type = 'square';
+      f.type = 'lowpass';
+      f.frequency.value = 600;
+      g.gain.value = 0;
+      osc.connect(f);
+      osc2.connect(f);
+      f.connect(g);
+      g.connect(Sound.master);
+      osc.start();
+      osc2.start();
+      v = this.voices[i] = { osc, osc2, f, g };
+    }
+    const t = c.currentTime;
+    const base = 55 + speed01 * 95 + (boost ? 30 : 0) + i * 3;
+    v.osc.frequency.setTargetAtTime(base, t, 0.05);
+    v.osc2.frequency.setTargetAtTime(base * 0.5, t, 0.05);
+    v.f.frequency.setTargetAtTime(380 + speed01 * 900 + (boost ? 600 : 0), t, 0.08);
+    const vol = on && !Sound.muted ? (0.025 + speed01 * 0.035) * CFG.engineVolume * 2 : 0;
+    v.g.gain.setTargetAtTime(vol, t, 0.08);
   },
-  bossdie: (s) => {
-    s.noise(1.0, { freq: 800, slide: 40, vol: 0.4 });
-    s.arp(['A5', 'E5', 'C5', 'A4', 'E4'], 0.1, { type: 'square', vol: 0.08 });
+  silence() {
+    for (let i = 0; i < this.voices.length; i++) this.set(i, false, 0, false);
   },
-  switch: (s) => {
-    s.tone(90, 0.3, { type: 'square', slide: 45, vol: 0.2 });
-    s.arp(['C5', 'E5', 'G5', 'C6', 'E6', 'G6', 'C7'], 0.07, { type: 'triangle', vol: 0.12, delay: 0.25 });
-  },
-  gameover: (s) => s.arp(['C5', 'G4', 'E4', 'A4', 'B4', 'A4', 'G#4', 'A#4', 'G#4', 'G4'], 0.16, { type: 'triangle', vol: 0.14, len: 0.3 }),
 };

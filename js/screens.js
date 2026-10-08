@@ -1,0 +1,358 @@
+'use strict';
+// Menu screens (DOM over the 3D view): title, party lobby, garage & store, how to play,
+// results and pause. They are plain buttons, so mouse, touch, keyboard, gamepad d-pads and
+// TV remotes (arrow keys + Enter) all work.
+
+const $ = (id) => document.getElementById(id);
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+const Screens = {
+  current: null,
+  garage: { slot: 0, kind: 'character', hover: null },
+
+  init() {
+    document.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => App.menu(b.dataset.go)));
+    this.initLobby();
+    this.initGarage();
+    $('resNext').addEventListener('click', () => App.leaderAction('next'));
+    $('resAgain').addEventListener('click', () => App.leaderAction('again'));
+    $('resLobby').addEventListener('click', () => App.leaderAction('lobby'));
+    $('pauseResume').addEventListener('click', () => App.togglePause(false));
+    $('pauseRestart').addEventListener('click', () => App.leaderAction('restart'));
+    $('pauseQuit').addEventListener('click', () => App.leaderAction('lobby'));
+    $('titleFoot').textContent = 'Tab: Edit Panel   ·   M: sound   ·   F: fullscreen';
+  },
+
+  show(name) {
+    this.current = name;
+    document.querySelectorAll('#ui .screen').forEach((s) => (s.hidden = s.id !== 'scr-' + name));
+    document.body.classList.toggle('menu-open', !!name);
+    const scr = name && $('scr-' + name);
+    if (scr) {
+      const f = scr.querySelector('[data-autofocus]') || scr.querySelector('button');
+      if (f) setTimeout(() => f.focus({ preventScroll: true }), 30);
+    }
+    if (name === 'lobby') this.renderLobby();
+    if (name === 'garage') this.renderGarage();
+  },
+
+  // ---------- lobby ----------
+  initLobby() {
+    const seg = (id, opts, key) => {
+      const wrap = $(id);
+      for (const [label, val] of opts) {
+        const b = el('button', 'seg-b', label);
+        b.type = 'button';
+        b.addEventListener('click', () => App.leaderAction(key, val));
+        b.dataset.val = String(val);
+        wrap.appendChild(b);
+      }
+    };
+    seg('optLaps', [['1', 1], ['2', 2], ['3', 3], ['5', 5]], 'laps');
+    seg('optCC', [['50cc', 50], ['100cc', 100], ['150cc', 150], ['200cc', 200]], 'cc');
+    seg('optBots', [['On', true], ['Off', false]], 'bots');
+    seg('optItems', [['On', true], ['Off', false]], 'items');
+    const tp = $('trackPick');
+    for (const t of TRACK_DEFS) {
+      const b = el('button', 'track-b');
+      b.type = 'button';
+      b.dataset.track = t.id;
+      b.appendChild(trackThumb(t.id, 112, 64));
+      const lab = el('span', 'tn', t.name);
+      b.appendChild(lab);
+      const found = el('span', 'tf');
+      b.appendChild(found);
+      b.addEventListener('click', () => App.leaderAction('track', t.id));
+      tp.appendChild(b);
+    }
+    $('startRace').addEventListener('click', () => App.leaderAction('start'));
+    $('addKb').addEventListener('click', () => App.addKeyboard());
+    $('addTouch').addEventListener('click', () => {
+      Party.localJoin('touch');
+      App.refreshShowroom();
+    });
+    Party.listeners.add(() => {
+      if (this.current === 'lobby') this.renderLobby();
+      if (this.current === 'garage') this.renderGarage();
+    });
+  },
+
+  renderLobby() {
+    const s = Party.settings;
+    const solo = App.solo;
+    $('scr-lobby').classList.toggle('solo', solo);
+    // join card
+    $('roomCode').textContent = Party.code || '····';
+    $('joinUrl').textContent = Party.joinUrl || 'Starting the party…';
+    $('netStatus').textContent = Party.status.text;
+    $('netStatus').classList.toggle('ok', Party.status.ok);
+    if (Party.joinUrl && this.qrFor !== Party.joinUrl) {
+      this.qrFor = Party.joinUrl;
+      drawQR($('qr'), Party.joinUrl);
+    }
+    // settings
+    for (const b of $('trackPick').children) {
+      b.classList.toggle('on', b.dataset.track === s.track);
+      b.setAttribute('aria-pressed', String(b.dataset.track === s.track));
+      const routes = Save.data.routes[b.dataset.track];
+      b.querySelector('.tf').textContent = routes && Object.keys(routes).length ? '🔑 secret found' : '🔒 secret route';
+    }
+    const mark = (id, v) => {
+      for (const b of $(id).children) {
+        const on = b.dataset.val === String(v);
+        b.classList.toggle('on', on);
+        b.setAttribute('aria-pressed', String(on));
+      }
+    };
+    mark('optLaps', s.laps);
+    mark('optCC', s.cc);
+    mark('optBots', s.bots);
+    mark('optItems', s.items);
+    // slots
+    const wrap = $('slots');
+    wrap.innerHTML = '';
+    Party.players.forEach((p, slot) => {
+      const card = el('div', 'slot' + (p ? ' filled' : ''));
+      card.style.setProperty('--sc', SLOT_COLORS[slot]);
+      const head = el('div', 'slot-head', 'P' + (slot + 1));
+      card.appendChild(head);
+      if (!p) {
+        card.appendChild(el('p', 'slot-empty', solo ? 'Free seat' : 'Scan the QR code, or press A on a gamepad'));
+      } else {
+        const row = el('div', 'slot-row');
+        row.appendChild(Icons.canvas(44, 44, (g) => Icons.head(g, p.config.character, 22, 24, 40)));
+        const info = el('div', 'slot-info');
+        info.appendChild(el('b', '', p.name));
+        const dev = p.kind === 'phone' ? (p.connected ? '📱 Phone' : '📱 Reconnecting…') : SOURCE_LABELS[p.src] || (p.src.startsWith('pad') ? '🎮 Gamepad ' + (Number(p.src.slice(3)) + 1) : p.src);
+        info.appendChild(el('small', '', dev));
+        row.appendChild(info);
+        card.appendChild(row);
+        const st = el('div', 'slot-state', p.kind === 'phone' ? (p.ready ? '✓ Ready' : 'Picking a kart…') : findPart('character', p.config.character).name);
+        if (p.ready || p.kind === 'local') st.classList.add('ready');
+        card.appendChild(st);
+        const acts = el('div', 'slot-acts');
+        const gb = el('button', '', 'Garage');
+        gb.type = 'button';
+        gb.addEventListener('click', () => {
+          this.garage.slot = slot;
+          App.menu('garage');
+        });
+        const rb = el('button', 'x', '✕');
+        rb.type = 'button';
+        rb.title = 'Remove ' + p.name;
+        rb.setAttribute('aria-label', 'Remove ' + p.name);
+        rb.addEventListener('click', () => {
+          Party.remove(slot);
+          App.refreshShowroom();
+        });
+        acts.append(gb, rb);
+        card.appendChild(acts);
+      }
+      wrap.appendChild(card);
+    });
+    const n = Party.list().length;
+    const start = $('startRace');
+    start.disabled = n === 0;
+    const waiting = Party.list().filter((p) => p.kind === 'phone' && p.connected && !p.ready).length;
+    $('startHint').textContent = n === 0 ? 'Add a racer to start' : waiting ? `Waiting for ${waiting} phone${waiting > 1 ? 's' : ''} to tap Ready (or start anyway)` : `${n} racer${n > 1 ? 's' : ''}${s.bots ? ' + bots' : ''} on ${TRACK_DEFS.find((t) => t.id === s.track).name}`;
+    $('addTouch').hidden = !matchMedia('(pointer: coarse)').matches || Party.list().some((p) => p.src === 'touch');
+  },
+
+  // ---------- garage ----------
+  initGarage() {
+    const tabs = $('garageTabs');
+    for (const k of CATALOG_KINDS) {
+      const b = el('button', 'tab', KIND_LABELS[k]);
+      b.type = 'button';
+      b.setAttribute('role', 'tab');
+      b.dataset.kind = k;
+      b.addEventListener('click', () => {
+        this.garage.kind = k;
+        this.renderGarage();
+      });
+      tabs.appendChild(b);
+    }
+    $('garageDone').addEventListener('click', () => App.menu('back'));
+  },
+
+  garagePlayer() {
+    let p = Party.players[this.garage.slot];
+    if (!p) {
+      p = Party.list()[0];
+      if (p) this.garage.slot = p.slot;
+    }
+    return p;
+  },
+
+  renderGarage() {
+    const G = this.garage;
+    const p = this.garagePlayer();
+    $('bank').textContent = Save.data.bank;
+    // who is being configured
+    const who = $('garageWho');
+    who.innerHTML = '';
+    for (const q of Party.list()) {
+      const b = el('button', 'who-b' + (q === p ? ' on' : ''), `P${q.slot + 1} ${q.name}`);
+      b.type = 'button';
+      b.style.setProperty('--sc', SLOT_COLORS[q.slot]);
+      b.addEventListener('click', () => {
+        G.slot = q.slot;
+        this.renderGarage();
+        App.refreshShowroom();
+      });
+      who.appendChild(b);
+    }
+    for (const b of $('garageTabs').children) {
+      b.classList.toggle('on', b.dataset.kind === G.kind);
+      b.setAttribute('aria-selected', String(b.dataset.kind === G.kind));
+    }
+    const cfg = p ? p.config : Save.ownedConfig(Save.data.local.kb && Save.data.local.kb.config);
+    const parts = $('garageParts');
+    parts.innerHTML = '';
+    for (const part of CATALOG[G.kind]) {
+      const owned = Save.owns(G.kind, part.id);
+      const on = cfg[G.kind] === part.id;
+      const b = el('button', 'part' + (on ? ' on' : '') + (owned ? '' : ' locked'));
+      b.type = 'button';
+      b.appendChild(Icons.canvas(64, 52, (g) => Icons.part(g, G.kind, part, 32, 26, 50, cfg)));
+      b.appendChild(el('span', 'pn', part.name));
+      b.appendChild(el('span', 'pp', owned ? (on ? 'Selected' : 'Owned') : `🪙 ${part.price}`));
+      b.addEventListener('focus', () => this.describe(part, cfg));
+      b.addEventListener('mouseenter', () => this.describe(part, cfg));
+      b.addEventListener('click', () => this.pick(part));
+      parts.appendChild(b);
+    }
+    this.describe(findPart(G.kind, cfg[G.kind]), cfg);
+    $('garageName').textContent = p ? `${p.name}'s kart` : 'Your kart';
+  },
+
+  describe(part, cfg) {
+    const G = this.garage;
+    const owned = Save.owns(G.kind, part.id);
+    $('partBlurb').textContent = (part.blurb || (part.special ? 'A shimmering special paint.' : 'A fresh coat of clay paint.')) + (owned ? '' : `  Costs ${part.price} coins.`);
+    const now = kartStats(cfg);
+    const next = kartStats(Object.assign({}, cfg, { [G.kind]: part.id }));
+    const dl = $('statBars');
+    dl.innerHTML = '';
+    for (const s of STAT_KEYS) {
+      dl.appendChild(el('dt', '', STAT_LABELS[s]));
+      const dd = el('dd');
+      const bar = el('div', 'bar');
+      const a = el('i', 'now');
+      a.style.width = (now[s] / 6) * 100 + '%';
+      const b = el('i', next[s] > now[s] ? 'up' : 'down');
+      b.style.left = (Math.min(now[s], next[s]) / 6) * 100 + '%';
+      b.style.width = (Math.abs(next[s] - now[s]) / 6) * 100 + '%';
+      bar.append(a, b);
+      dd.appendChild(bar);
+      dl.appendChild(dd);
+    }
+  },
+
+  pick(part) {
+    const G = this.garage;
+    const p = this.garagePlayer();
+    if (!Save.owns(G.kind, part.id)) {
+      const err = Save.buy(G.kind, part.id);
+      if (err) {
+        Sound.play('locked');
+        App.toast(err);
+        return;
+      }
+      Sound.play('buy');
+      App.toast(`Bought ${part.name}!`);
+    } else Sound.play('select');
+    if (p) {
+      const cfg = Object.assign({}, p.config, { [G.kind]: part.id });
+      Party.setLocalConfig(p, cfg);
+      if (p.kind === 'phone' && Party.link) Party.link.send(p.pid, { t: 'welcome', slot: p.slot, color: SLOT_COLORS[p.slot], name: p.name, config: p.config });
+    } else {
+      Save.data.local.kb = { config: Object.assign({}, Save.ownedConfig(Save.data.local.kb && Save.data.local.kb.config), { [G.kind]: part.id }) };
+      Save.persist();
+    }
+    this.renderGarage();
+    App.refreshShowroom();
+    // keep focus on the same card after the re-render
+    const idx = CATALOG[G.kind].indexOf(part);
+    const btn = $('garageParts').children[idx];
+    if (btn) btn.focus({ preventScroll: true });
+  },
+
+  // ---------- results ----------
+  renderResults(rows, news) {
+    const t = $('resultsTable');
+    t.innerHTML = '';
+    const head = el('tr');
+    for (const h of ['', 'Racer', 'Time', 'Best lap', 'Coins']) head.appendChild(el('th', '', h));
+    t.appendChild(head);
+    for (const r of rows) {
+      const tr = el('tr', r.slot >= 0 ? 'human' : '');
+      if (r.slot >= 0) tr.style.setProperty('--sc', SLOT_COLORS[r.slot]);
+      tr.appendChild(el('td', 'pos', ordinal(r.place)));
+      const who = el('td', 'who');
+      who.appendChild(Icons.canvas(30, 30, (g) => Icons.head(g, r.config.character, 15, 16, 28)));
+      who.appendChild(el('span', '', r.slot >= 0 ? `P${r.slot + 1} ${r.name}` : r.name));
+      tr.appendChild(who);
+      tr.appendChild(el('td', '', (r.finished ? '' : '~') + fmtTime(r.time)));
+      tr.appendChild(el('td', '', r.bestLap ? fmtTime(r.bestLap) : '—'));
+      tr.appendChild(el('td', '', r.slot >= 0 ? `+${r.earned}` : String(r.coins)));
+      t.appendChild(tr);
+    }
+    const n = $('resultsNews');
+    n.hidden = !news.length;
+    n.textContent = news.join('  ·  ');
+    $('resultsTitle').textContent = rows.some((r) => r.slot >= 0 && r.place === 1) ? 'Victory!' : 'Results';
+  },
+};
+
+// Mini course map for the track picker.
+function trackThumb(id, w, h) {
+  return Icons.canvas(w, h, (g) => {
+    const T = getTrack(id);
+    const b = T.bounds;
+    const sc = Math.min((w - 10) / (b.maxX - b.minX - 80), (h - 10) / (b.maxZ - b.minZ - 80));
+    const mx = (b.minX + b.maxX) / 2, mz = (b.minZ + b.maxZ) / 2;
+    g.lineJoin = g.lineCap = 'round';
+    for (const [lw, col] of [[6, '#2b1838'], [3, '#fff6ea']]) {
+      for (const p of T.paths) {
+        g.strokeStyle = p.branch && col !== '#2b1838' ? '#c9b3ee' : col;
+        g.lineWidth = p.branch ? lw - 1.5 : lw;
+        g.setLineDash(p.branch && col !== '#2b1838' ? [3, 3] : []);
+        g.beginPath();
+        for (let i = 0; i < p.n; i += 3) {
+          const x = w / 2 + (p.x[i] - mx) * sc, y = h / 2 + (p.z[i] - mz) * sc;
+          if (i === 0) g.moveTo(x, y);
+          else g.lineTo(x, y);
+        }
+        if (p.closed) g.closePath();
+        g.stroke();
+      }
+    }
+    g.setLineDash([]);
+    g.fillStyle = '#ff6f91';
+    g.beginPath();
+    g.arc(w / 2 + (T.main.x[0] - mx) * sc, h / 2 + (T.main.z[0] - mz) * sc, 3, 0, TAU);
+    g.fill();
+  });
+}
+
+function drawQR(canvas, text) {
+  const g = canvas.getContext('2d');
+  const W = canvas.width;
+  g.fillStyle = '#fff6ea';
+  g.fillRect(0, 0, W, W);
+  if (typeof qrcode !== 'function') return;
+  const q = qrcode(0, 'M');
+  q.addData(text);
+  q.make();
+  const n = q.getModuleCount();
+  const cell = Math.floor((W - 16) / n);
+  const off = Math.floor((W - cell * n) / 2);
+  g.fillStyle = '#2b1838';
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) g.fillRect(off + c * cell, off + r * cell, cell, cell);
+}

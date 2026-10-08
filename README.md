@@ -1,120 +1,167 @@
-# Super Clay Isles
+# Clay Kart: Party Grand Prix
 
-A Super Mario World-style side-scroller in a claymation, floating-cloud-island style. Every
-character, island and cloud is sculpted in code on a `<canvas>`: lumpy shaded clay blobs that
-"boil" at 12 frames per second like stop-motion, thumbprints and grain baked into the terrain,
-drippy grass caps, and tapering rocky roots under every island. All music and sound is
-synthesized with WebAudio, so there are no asset files.
+A Mario Kart-style racer in the claymation look of *Super Clay Isles*. Up to four people race
+on one big screen (a smart TV, desktop or tablet) and steer with their phones, or you race
+seven clay bots on your own. Every kart, racer, tree and cloud is sculpted in code from lumpy
+clay primitives that "boil" twelve times a second like stop-motion. There are no model, texture
+or audio files: everything is generated, and the music and sound are synthesized.
 
 ## Play
 
-Open `index.html` in a browser. No build step and no server needed.
-
-To serve it locally instead (for example to test on a phone on the same network):
+### Party race (big screen + phones)
 
 ```sh
-npm start        # http://localhost:8080
+npm start            # or: node server.js   (no install needed, Node 18+)
 ```
+
+1. Open `http://localhost:8080` on the big screen (the computer running the server, or a
+   smart TV / tablet browser pointed at the address the server prints).
+2. Choose **Party Race**. A QR code and a four-letter room code appear.
+3. Each player scans the QR code (or opens `pad.html` and types the code). Phones must be on
+   the same Wi-Fi as the server.
+4. On the phone: pick a racer, kart, wheels and paint (buy more with the party's coins), then
+   tap **I'm ready!**. The first player is the race leader and can choose the course, laps,
+   engine class, bots and items from their phone; the big screen has the same controls.
+
+The server is a single dependency-free file (`server.js`): it serves the game and relays
+messages between the big screen and the phones over WebSockets. If a phone drops out mid-race a
+bot keeps its kart going until it reconnects, and a big screen that reloads gets its room back.
+
+**Online mode.** If the game is opened from a static web host (no `server.js`), Party Race
+falls back to peer-to-peer WebRTC through the public PeerJS broker, so phones can join over the
+internet. That needs an internet connection; on a local network `npm start` is the reliable
+choice. Tilt steering is only offered on https pages (browsers only allow motion sensors in a
+secure context); drag steering works everywhere.
+
+### Solo or same-screen
+
+Choose **Quick Race** to race against bots. **+ Keyboard player** adds a second racer on the
+same keyboard, gamepads join by pressing **A** in the lobby, and a tablet can use the on-screen
+touch pad. Opening `index.html` straight from disk works for solo and same-screen play.
 
 ### Controls
 
-| Action | Keyboard | Gamepad |
-| --- | --- | --- |
-| Move / walk the map | Arrow keys or WASD | D-pad / left stick |
-| Jump (hold to jump higher, hold while falling to glide with the cape) | Z, Space or K | A |
-| Run, grab items, cape spin, Dumpling's tongue | X, Shift or J (hold) | X / Y |
-| Spin jump (bounces off spiky enemies; hops off Dumpling) | C or L | B |
-| Drop the reserve item | V | Select |
-| Pause | Enter, P or Esc | Start |
-| Edit Panel | Tab or ` | |
-| Mute | M | |
+| Action | Keyboard (solo) | Two on one keyboard | Gamepad | Phone |
+| --- | --- | --- | --- | --- |
+| Steer | ← → or A D | A D / ← → | Left stick, d-pad | Drag (or tilt, or ◀ ▶ buttons) |
+| Gas | ↑ or W | W / ↑ | A or RT | Automatic (can be switched off) |
+| Brake / reverse | ↓ or S | S / ↓ | B or LT | Brake button |
+| Hop & drift (hold) | Space, Shift or Z | Left Shift / Right Shift or / | RB or LB | Drift button |
+| Use item | X, E or Q | Q / . | X | Item button |
+| Throw backwards / look back | hold C or R | R / , | Y | Swipe down on Item |
+| Pause | Esc or P | | Start | ⚙ → Pause |
+| Edit Panel | Tab or ` | | | |
+| Mute / fullscreen | M / F | | | |
 
-On touch screens an on-screen pad appears, with a "Run lock" toggle so one thumb is free.
+Menus work with a mouse, touch, arrow keys + Enter (TV remotes) or a gamepad's d-pad.
 
 ## What's in it
 
-**The world map** is a branching graph of five floating islands. Paths appear pebble by
-pebble when you find the exit that unlocks them.
+**Three courses**, each with a key-locked hidden route:
 
-```
-                        [Cloud Switch Palace]      [Starlight Lookout]
-                              ▲ L1 secret                 ▲ L3 secret
-[Clay Hut] ── [Puffball Meadow] ── [Gusty Glade] ── [Thunderhead Keep] ── [Sunny Summit]
-                  L1 normal          L2 normal  ╲       L3 normal             ▲
-                                                 ╲_________ rainbow __________╱
-                                                          L2 secret
-```
+| Course | World | Hidden route |
+| --- | --- | --- |
+| Puffball Circuit | Floating clay meadow: hedges, windmills, giant mushrooms, a cloud bridge, a jump ramp and Mudlets wandering across the road | **Hollow Log Shortcut** through the infield |
+| Sherbet Slopes | Snow and ice: a summit climb, a ski jump over a crevasse, a frozen lake that slides, snowmen and an ice castle | **Crystal Cave**, an icy tunnel through the mountain |
+| Magma Keep | King Mudlet's castle over a lava sea: stompers, fire bars, a lava bridge, a lava-pit jump and a volcano | **Rainbow Bridge** arching over the lava lake |
 
-- **Three levels**, each with a normal exit (goal gate or boss orb) and a secret exit.
-- **Secret exits use keys.** Carry a key (hold run) into a keyhole to open a hidden route.
-  Lock blocks crumble when a key touches them.
-- **Unlockable paths.** Puffball Meadow's secret leads to the Cloud Switch Palace. Pressing
-  its switch turns the dotted outline blocks in Gusty Glade and Thunderhead Keep solid,
-  opening stairways to their keys. Gusty Glade's secret unrolls a rainbow straight to the
-  summit; Thunderhead Keep's secret reveals the Starlight Lookout (and a stardust cape).
-- **Running** builds the P-meter; at full charge you sprint.
-- **Cape** (from feathers): glide by holding jump while falling, take off with a full
-  P-meter, then dive (hold forward) and pull up (hold back) to swoop. X spins the cape.
-- **Dumpling**, a rideable clay dino, hatches from egg blocks. Riding gives an extra hit,
-  lets you stomp spiky enemies, and X flicks a tongue that swallows enemies (shells are
-  kept in the mouth and spat back out). Dumpling follows you between levels, and bongos join
-  the music while you ride.
-- Shells to kick and carry, springs, moving cloud rafts, cannons, thorn brambles, a
-  mid-level checkpoint, a reserve item box, three sun coins per level, and the King Mudlet
-  boss in Thunderhead Keep.
+**Keys and hidden routes.** A golden key floats somewhere risky on every course (over a jump,
+at the edge of a lava bridge, out on the ice). Carry it into the locked gate and the door
+sinks into the ground for a few seconds: a shortcut with coins, item boxes and boost pads.
+Anyone right behind you can slip through too. Finding a route the first time adds 15 coins to
+the bank, and bots hunt for keys as well.
+
+**Racing.** Hop-drifts charge blue, orange and purple sparks for mini-turbos, rocket starts
+(hit the gas as the **1** appears), trick boosts off ramps, boost pads, off-road and mud,
+slippery ice, coins that raise your top speed (up to 10), kart-to-kart bumping by weight, a
+cloud that fishes you back when you fall, wrong-way warnings, laps, positions and a podium.
+
+**Items** from rainbow **?** boxes, weighted by position so the back of the pack gets the good
+stuff: mushroom, triple mushroom, banana, green shell (bounces off walls), red shell (homes in
+on the racer ahead), clay bomb, star and coin pouch.
+
+**Bots** follow their own racing lines, take the inside of bends, drift for mini-turbos, dodge
+hazards, use items with a little cunning, take hidden routes when they have a key, and rubber-
+band gently around the human racers.
+
+**Split screen** for two to four people (side by side or stacked for two players), each with
+their own camera, HUD, item slot and position, plus a shared minimap.
+
+**Garage & store.** Six racers (Pepper, Dumpling, Shelly, Thornbun, Flapper, King Mudlet), six
+kart bodies, four wheel sets and eleven paints (including shimmering Gold Leaf and Rainbow).
+Each part changes speed, acceleration, weight, handling, traction and mini-turbo; the stat bars
+preview the difference before you buy. Coins collected in races plus a placing bonus fill a
+shared party bank, saved in the big screen's browser.
 
 ## Edit Panel
 
-Press Tab (or the **Edit Panel** button). Every gameplay value is a slider that applies on
-the next frame and is remembered in the browser: run, sprint and acceleration, P-meter
-charge time, gravity and jump strength, coyote time and jump buffering, glide speed and
-every flight parameter, companion speed and tongue length, enemy and shell speeds, cannon
-rate, boss HP, camera smoothing, game speed, and the clay look itself (stop-motion rate,
-wobble, squash and stretch, grain, vignette, parallax).
+Press **Tab** (or the **Edit Panel** button). Every gameplay value is a slider that applies on the
+next frame and is remembered in the browser: top speed, acceleration, steering, grip, off-road,
+wall bounce and bumping; drift turn rate, spark times and mini-turbo strengths; boost, mushroom,
+pad, trick and rocket-start boosts; gravity and ramp launch; ice grip; item box respawn, roulette,
+catch-up luck, shell speed and homing, spin-out times, bomb blast, star power; bot pace,
+cornering, rubber-banding, item use, aggression and key hunting; the chase camera; and the clay
+look itself (stop-motion rate, wobble, rim shading, squash and stretch, grain, vignette, haze,
+particles and render resolution, with automatic resolution scaling for slow TVs).
 
-It also has feel presets (Moon Clay, Turbo Run, Heavy Clay, Sky Glider, Chill Mode), a live
-readout of speed and P-meter, playtest tools (give cape, summon Dumpling, drop a key,
-toggle the switch, unlock every path, warp to any level), god mode, infinite flight,
-hitbox display, and JSON copy/paste for sharing tweaks.
+It also has feel presets (Drift King, 200cc Rush, Ice Rink, Moon Clay, Item Frenzy, Chill Bots),
+a live readout (FPS, resolution, speed, surface, drift charge, boost, place, road position),
+playtest tools (give any item, hand out keys, open every gate, star power, max coins, skip a
+lap, finish the race, +100 garage coins, unlock every part, autopilot) and JSON copy/paste for
+sharing tweaks.
 
 ## Project layout
 
 ```
-index.html          page shell, Edit Panel markup, touch pad
-css/style.css       studio frame and panel styling
-js/config.js        every tweakable parameter (drives the Edit Panel) and presets
-js/levels.js        level builder DSL and the four level layouts
-js/physics.js       tile collision (pure; shared with the tests)
-js/clay.js          claymation drawing toolkit: blobs, boil, grain, clay text
-js/terrain.js       contour-traced island terrain, chunk baking, parallax backdrops
-js/entities.js      enemies, items, platforms, goal, keys and the boss
-js/player.js        Pepper (movement, cape, carrying) and Dumpling
-js/level.js         level runtime, interactions, camera, HUD
-js/worldmap.js      overworld nodes, paths and unlock animations
-js/game.js          state machine, saves, transitions, title and ending scenes
+index.html          big screen: menus, HUD canvas, touch pad, Edit Panel
+pad.html            phone controller
+server.js           zero-dependency static server + WebSocket room relay
+css/style.css       big-screen look (shared with Super Clay Isles)
+css/pad.css         phone controller look
+vendor/             three.js r159, qrcode-generator, PeerJS (all MIT)
+js/config.js        every tweakable parameter (drives the Edit Panel), presets, engine classes
+js/parts.js         racers, karts, wheels, paints, stats and prices
+js/tracks.js        the three courses and their colour themes
+js/track.js         turtle-built racing lines, hidden branches, spatial queries (pure)
+js/kart.js          kart physics: grip, drifting, mini-turbos, air, walls, falls (pure)
+js/items.js         item boxes, shells, bananas, bombs, coins, keys, gates, hazards (pure)
+js/ai.js            bot drivers (pure)
+js/race.js          grid, countdown, laps, positions, bumping, rubber-banding (pure)
+js/clay3d.js        clay materials (boil, rim shading, fingerprints) and lumpy geometry kit
+js/world3d.js       builds a course in 3D: island terrain, roads, walls, scenery, sky
+js/kart3d.js        clay karts and drivers
+js/fx3d.js          particles, item boxes, coins, keys, shells, hazards, rescue clouds
+js/view.js          split-screen cameras and the race HUD
+js/scenes3d.js      the clay showroom behind the lobby, garage and podium
+js/party.js         player slots, phones, the coin bank and garage unlocks
+js/net.js           local WebSocket and online WebRTC transports
+js/screens.js       menu screens
+js/icons.js         2D clay icons (items, racers, parts) for the HUD and the phone
+js/clay.js          2D claymation drawing toolkit (from Super Clay Isles)
+js/audio.js         synthesized music, sound effects and engine hum
+js/input.js         keyboard, gamepad and touch input, menu navigation
 js/editpanel.js     Edit Panel
-js/audio.js         synthesized sound effects and music
-js/input.js         keyboard, gamepad and touch input
-js/main.js          boot and fixed-timestep loop
+js/main.js          app flow and the fixed-timestep loop
+js/pad.js           phone controller logic
 ```
 
-Levels are written with a small builder (`g.ground(x, w, top)`, `g.island(...)`,
-`g.cloud(...)`, `g.row(x, y, '?B?')`, `g.put(x, y, 'K')`); the legend is at the top of
-`js/levels.js`.
+Courses are written as turtle walks (`{ s: 80 }` straight, `{ r: 90, rad: 30 }` right turn,
+with elevation, width and wall flags), closed automatically, and decorated with placements
+along them (`{ seg: 7, t: 0.3, d: -4 }` = segment 7, 30% along, 4 units left of centre).
 
 ## Tests
 
 ```sh
-npm test               # both suites
-npm run test:levels    # reachability analysis
-npm run test:e2e       # browser playthrough (needs Playwright + Chromium)
+npm test             # both suites
+npm run test:sim     # headless races on every course (Node only)
+npm run test:e2e     # big screen + two phones in Chromium (needs Playwright)
 ```
 
-- `tests/reachability.js` loads the real physics and level code in Node and explores every
-  level by simulating jumps frame by frame. It checks that each exit, key and keyhole is
-  reachable on foot, that switch-gated secrets need the switch, and that every sun coin and
-  item block can be reached. `node tests/reachability.js --dump l2` prints a level as ASCII.
-- `tests/smoke.mjs` boots the game in headless Chromium and plays through the mechanics
-  with real input: the P-meter, blocks, stomps, hatching and riding Dumpling, the tongue,
-  gliding and flight, cape spin, springs, the key and keyhole, the switch palace, the goal
-  gate, dying, lock blocks, the boss fight and the Edit Panel.
+- `tests/sim.js` loads the real track, kart, item, bot and race code in Node and runs full
+  eight-bot races on every course: everyone must finish, nobody may get stuck or keep falling
+  off, bots must drift and use items, a key must open each hidden route (and no keyless kart
+  may pass a locked gate), and each ramp must clear its chasm.
+- `tests/e2e.mjs` starts the server, opens the big screen and two emulated phones, joins the
+  room from the QR link, customises and buys parts, readies up, starts from the leader's phone,
+  steers with phone input, checks split screen, finishes the race and checks the results, the
+  coin bank, the garage and the Edit Panel.

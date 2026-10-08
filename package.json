@@ -1,13 +1,16 @@
 {
-  "name": "super-clay-isles",
+  "name": "clay-kart",
   "version": "1.0.0",
   "private": true,
-  "description": "A claymation, Super Mario World-style side-scroller across floating cloud islands, with a branching world map and a live Edit Panel.",
+  "description": "A claymation, Mario Kart-style party racer: race bots or up to four friends who steer with their phones, tune karts in the garage and hunt keys for hidden routes, with a live Edit Panel.",
   "scripts": {
-    "start": "npx --yes http-server -c-1 -p 8080 .",
-    "test": "node tests/reachability.js && node tests/smoke.mjs",
-    "test:levels": "node tests/reachability.js",
-    "test:e2e": "node tests/smoke.mjs"
+    "start": "node server.js",
+    "test": "node tests/sim.js && node tests/e2e.mjs",
+    "test:sim": "node tests/sim.js",
+    "test:e2e": "node tests/e2e.mjs"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "devDependencies": {
     "playwright": "^1.56.1"

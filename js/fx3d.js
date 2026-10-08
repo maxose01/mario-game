@@ -107,6 +107,7 @@ class RaceFX {
     this.scene.traverse((o) => {
       if (o.isInstancedMesh) o.dispose();
     });
+    for (const m of this.models) if (m.marker) m.marker.material.map.dispose();
   }
 
   // ---------- karts ----------
@@ -230,6 +231,8 @@ class RaceFX {
         }
         body.position.y = 1.2;
       }
+      // faces look back down the road, at the karts coming towards them
+      if (h.kind === 'stomper' || h.kind === 'snowman') body.rotation.y = Math.PI;
       mesh.add(body);
       mesh.position.set(h.x, h.y, h.z);
       mesh.rotation.y = -h.head;
@@ -466,7 +469,13 @@ class RaceFX {
 // Small textures and shared geometries (built once, lazily).
 function memo(fn) {
   let v = null;
-  return () => v || (v = fn());
+  return () => {
+    if (!v) {
+      v = fn();
+      if (v.userData) v.userData.shared = true;
+    }
+    return v;
+  };
 }
 const glowTexture = memo(() => {
   const c = Clay.makeCanvas(64, 64);

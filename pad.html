@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>Clay Kart Controller</title>
+    <meta name="description" content="Turn your phone into a Clay Kart controller for the big screen." />
+    <meta name="theme-color" content="#2b1838" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@500;700;800&display=swap" />
+    <link rel="stylesheet" href="css/pad.css" />
+  </head>
+  <body>
+    <!-- join -->
+    <main id="v-join" class="view">
+      <h1 class="wordmark">Clay <span>Kart</span></h1>
+      <p class="sub">Your phone is the controller. The race is on the big screen.</p>
+      <form id="joinForm" class="card" autocomplete="off">
+        <label for="code">Room code</label>
+        <input id="code" name="code" maxlength="4" inputmode="text" autocapitalize="characters" spellcheck="false" placeholder="ABCD" required />
+        <label for="name">Your name</label>
+        <input id="name" name="name" maxlength="12" spellcheck="false" placeholder="Racer" />
+        <button type="submit" class="go">Join the race</button>
+        <p id="joinErr" class="err" role="alert"></p>
+      </form>
+    </main>
+
+    <!-- lobby & garage -->
+    <main id="v-lobby" class="view" hidden>
+      <header class="who">
+        <span class="badge" id="badge">P1</span>
+        <div class="who-info">
+          <b id="meName">Racer</b>
+          <small id="meStatus">Pick your racer and kart</small>
+        </div>
+        <div class="bank"><i class="coin"></i><b id="bank">0</b></div>
+      </header>
+      <section class="card">
+        <div class="tabs" id="tabs" role="tablist"></div>
+        <div class="parts" id="parts"></div>
+        <p class="blurb" id="blurb"></p>
+        <dl class="statbars" id="stats"></dl>
+      </section>
+      <section class="card lead" id="leadCard" hidden>
+        <h2>You're the race leader</h2>
+        <div class="tracks" id="tracks"></div>
+        <div class="opt"><span>Laps</span><div class="seg" id="sLaps"></div></div>
+        <div class="opt"><span>Class</span><div class="seg" id="sCC"></div></div>
+        <div class="opt"><span>Bots</span><div class="seg" id="sBots"></div></div>
+        <div class="opt"><span>Items</span><div class="seg" id="sItems"></div></div>
+        <button type="button" class="go" id="leadStart">Start the race</button>
+      </section>
+      <section class="card players" id="players"></section>
+      <div class="sticky">
+        <button type="button" class="go ready" id="readyBtn">I'm ready!</button>
+      </div>
+    </main>
+
+    <!-- race controller -->
+    <main id="v-race" class="view" hidden>
+      <div class="hudbar">
+        <div class="place" id="hPlace">–</div>
+        <div class="lap" id="hLap">Lap 1/3</div>
+        <div class="coins"><i class="coin"></i><b id="hCoins">0</b></div>
+        <div class="keyi" id="hKey" hidden title="You have a key">🔑</div>
+        <div class="item" id="hItem"></div>
+        <button type="button" class="mini" id="menuBtn" aria-label="Controller settings">⚙</button>
+      </div>
+      <div class="pad">
+        <div class="steer" id="steer">
+          <div class="wheel" id="wheel"><div class="spoke"></div></div>
+          <p class="steer-hint" id="steerHint">Drag left and right to steer</p>
+          <div class="arrows" id="arrows" hidden>
+            <button type="button" data-b="left" aria-label="Steer left">◀</button>
+            <button type="button" data-b="right" aria-label="Steer right">▶</button>
+          </div>
+        </div>
+        <div class="btns">
+          <button type="button" class="b-item" data-b="item">Item<small>swipe ↓ to throw back</small></button>
+          <button type="button" class="b-drift" data-b="drift">Drift<small>hold</small></button>
+          <button type="button" class="b-brake" data-b="brake">Brake</button>
+          <button type="button" class="b-gas" data-b="gas" hidden>Gas</button>
+        </div>
+      </div>
+      <div class="banner" id="banner" hidden></div>
+      <div class="sheet" id="sheet" hidden>
+        <div class="card">
+          <h2>Controller</h2>
+          <div class="opt"><span>Steering</span><div class="seg" id="optSteer"></div></div>
+          <div class="opt"><span>Auto-gas</span><div class="seg" id="optGas"></div></div>
+          <div class="opt"><span>Vibration</span><div class="seg" id="optBuzz"></div></div>
+          <button type="button" id="fsBtn">Fullscreen</button>
+          <button type="button" id="pauseBtn">Pause the race</button>
+          <button type="button" class="go" id="sheetClose">Back to racing</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- results -->
+    <main id="v-results" class="view" hidden>
+      <div class="card result">
+        <p class="big-place" id="rPlace">1st</p>
+        <p id="rEarned"></p>
+        <ol id="rList"></ol>
+        <div class="lead-acts" id="rLead" hidden>
+          <button type="button" class="go" data-lead="next">Next course</button>
+          <button type="button" data-lead="again">Race again</button>
+          <button type="button" data-lead="lobby">Back to the lobby</button>
+        </div>
+        <p class="wait" id="rWait">Waiting for the race leader…</p>
+      </div>
+    </main>
+
+    <div class="overlay" id="overlay" hidden><div class="card"><p id="overlayText">Connecting…</p><button type="button" id="overlayBtn" hidden>Try again</button></div></div>
+
+    <script src="js/config.js"></script>
+    <script src="js/util.js"></script>
+    <script src="js/clay.js"></script>
+    <script src="js/parts.js"></script>
+    <script src="js/icons.js"></script>
+    <script src="js/net.js"></script>
+    <script src="js/pad.js"></script>
+  </body>
+</html>
