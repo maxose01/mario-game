@@ -87,7 +87,7 @@ const KartModels = {
       if (z < 0) w.rotation.y = Math.PI; // hub faces outward on both sides
       holder.add(w);
       group.add(holder);
-      wheels.push({ holder, mesh: w, front, side: z > 0 ? 1 : -1 });
+      wheels.push({ holder, mesh: w, front, side: z > 0 ? 1 : -1, base: holder.position.clone() });
     }
     let shadow = null;
     if (opts.shadow !== false) {
@@ -96,9 +96,168 @@ const KartModels = {
     }
     return { group, body, head: hm, wheels, paintMat, detailMat, shadow, special, cfg, geo };
   },
+
+  // Race-only extras on a built kart: the glider (folded away until a glide ramp throws the kart
+  // off), the hover glow under each wheel for anti-gravity road and a cyan glow pool under the
+  // kart. The showroom never needs them.
+  racing(m) {
+    const geo = m.geo;
+    // the glider hinges on a mast behind the driver's head
+    const glider = new THREE.Group();
+    glider.position.set(geo.headPos.x - 0.55, geo.headPos.y - 0.35, 0);
+    const canopy = new THREE.Mesh(GLIDER_CANOPY_GEO(), m.paintMat);
+    const frame = new THREE.Mesh(GLIDER_FRAME_GEO(), m.detailMat);
+    glider.add(canopy, frame);
+    glider.visible = false;
+    m.body.add(glider);
+    m.glider = glider;
+    m.gliderMeshes = [canopy, frame];
+    m.glideOpen = 0;
+    // wingtips (glider space) for the wind ribbons
+    m.tips = [new THREE.Vector3(-0.9, 1.25, -2.55), new THREE.Vector3(-0.9, 1.25, 2.55)];
+    // hover glows: a ring on the hub side of each wheel, facing the road once the wheel folds flat
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0x8ff6ff, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: true });
+    const ws = WHEEL_SPECS[m.cfg.wheels] || WHEEL_SPECS.standard;
+    for (const w of m.wheels) {
+      const ring = new THREE.Mesh(HOVER_RING_GEO(), ringMat);
+      ring.scale.setScalar(geo.wheelR / 0.4);
+      ring.position.z = w.side * (ws.w / 2 + 0.06);
+      ring.visible = false;
+      w.holder.add(ring);
+      w.glow = ring;
+    }
+    m.hoverMat = ringMat;
+    const pool = new THREE.Mesh(GLOW_POOL_GEO(), new THREE.MeshBasicMaterial({ map: this.glowTexture(), color: 0x58d8ff, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, fog: true }));
+    pool.position.y = 0.1;
+    pool.renderOrder = 1;
+    pool.visible = false;
+    m.group.add(pool);
+    m.hoverPool = pool;
+    m.sbT = 0; // spin-boost twirl, 1 -> 0
+    return m;
+  },
+
+  // Real-time shadows from the kart (not the staff ghost's).
+  castShadows(m, on = true) {
+    m.group.traverse((o) => {
+      if (o.isMesh && o.material !== m.hoverMat && o !== m.hoverPool) o.castShadow = on;
+    });
+  },
+
+  // A staff ghost: see-through, pale blue and shadowless (its own materials, so nothing else fades).
+  ghostify(m) {
+    for (const mat of [m.paintMat, m.detailMat]) {
+      mat.transparent = true;
+      mat.opacity = 0.42;
+      mat.emissive.set('#5a7cc0');
+      mat.emissiveIntensity = 0.45;
+    }
+    m.ghost = true;
+    m.group.traverse((o) => {
+      if (o.isMesh) {
+        o.castShadow = false;
+        o.renderOrder = 3;
+      }
+    });
+    if (m.shadow) m.shadow.visible = false;
+  },
+
+  glowTexture() {
+    if (this.glowTex) return this.glowTex;
+    const c = Clay.makeCanvas(64, 64);
+    const g = c.getContext('2d');
+    const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grd.addColorStop(0, 'rgba(255,255,255,1)');
+    grd.addColorStop(0.4, 'rgba(255,255,255,0.45)');
+    grd.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, 64, 64);
+    this.glowTex = new THREE.CanvasTexture(c);
+    return this.glowTex;
+  },
 };
 const SHADOW_GEO = new THREE.PlaneGeometry(3.4, 2.4).rotateX(-Math.PI / 2);
 SHADOW_GEO.userData.shared = true;
+
+// Shared race-extra geometries, built on first use.
+function kartMemo(fn) {
+  let g = null;
+  return () => {
+    if (!g) {
+      g = fn();
+      g.userData.shared = true;
+    }
+    return g;
+  };
+}
+const HOVER_RING_GEO = kartMemo(() => new THREE.RingGeometry(0.12, 0.52, 20));
+const GLOW_POOL_GEO = kartMemo(() => new THREE.PlaneGeometry(4.2, 3.2).rotateX(-Math.PI / 2));
+
+// The glider's canopy: a swept, cambered wing that droops at the tips, two skins of stripy clay
+// (white and grey, tinted by the paint) over a span of 5.2. Glider space: x forward, the mast
+// foot at the origin, the canopy riding ~1.5 above it.
+const GLIDER_CANOPY_GEO = kartMemo(() => {
+  const NU = 14, NV = 5, half = 2.6;
+  const verts = [], cols = [], uvs = [], idx = [];
+  const white = new THREE.Color('#ffffff'), stripe = new THREE.Color('#c9c3d0');
+  for (const skin of [1, -1]) {
+    const base = verts.length / 3;
+    for (let i = 0; i <= NU; i++) {
+      const u = (i / NU) * 2 - 1; // -1 left tip .. 1 right tip
+      const au = Math.abs(u);
+      const chord = 2.0 - 0.9 * au;
+      const le = 0.75 - 0.75 * au * au; // swept leading edge
+      for (let j = 0; j <= NV; j++) {
+        const v = j / NV;
+        const x = le - chord * v;
+        // camber over the chord, droop toward the tips, a fat leading edge
+        const y = 1.55 + 0.26 * Math.sin(Math.PI * Math.pow(v, 0.7)) - 0.55 * au * au + skin * (0.07 + 0.05 * (1 - v));
+        const z = u * half;
+        verts.push(x, y, z);
+        uvs.push(u * 1.6, v * 0.7);
+        const c = Math.floor((u + 1) * 3.5) % 2 ? stripe : white;
+        cols.push(c.r, c.g, c.b);
+      }
+    }
+    for (let i = 0; i < NU; i++) {
+      for (let j = 0; j < NV; j++) {
+        const a = base + i * (NV + 1) + j, b = a + NV + 1;
+        if (skin > 0) idx.push(a, b, a + 1, a + 1, b, b + 1);
+        else idx.push(a, a + 1, b, a + 1, b + 1, b);
+      }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  GK.lump(g, 0.04, 2.5, 7);
+  return g;
+});
+// The mast, the side struts, a rounded leading-edge spar and wingtip bobbles.
+const GLIDER_FRAME_GEO = kartMemo(() => {
+  const at = GK.at.bind(GK);
+  const metal = '#c9c3d6', trim = '#fff6ea';
+  const P = [at(GK.cyl(0.06, 0.07, 1.6, metal, { segs: 6, lump: 0 }), 0.15, 0.78, 0, 0, 0, -0.18)];
+  for (const s of [-1, 1]) P.push(at(GK.cyl(0.04, 0.04, 1.9, metal, { segs: 5, lump: 0 }), 0.05, 1.05, s * 0.8, s * 0.95, 0, 0));
+  // leading edge: a chain of short tubes along the swept edge
+  const N = 8;
+  for (let k = 0; k < N; k++) {
+    const u0 = (k / N) * 2 - 1, u1 = ((k + 1) / N) * 2 - 1;
+    const p = (u) => new THREE.Vector3(0.75 - 0.75 * u * u, 1.66 - 0.55 * u * u, u * 2.6);
+    const a = p(u0), b = p(u1), mid = a.clone().add(b).multiplyScalar(0.5);
+    const len = a.distanceTo(b);
+    const tube = GK.cyl(0.09, 0.09, len + 0.08, trim, { segs: 6, lump: 0 });
+    // align the tube (y axis) with a -> b
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+    tube.applyQuaternion(q);
+    P.push(tube.translate(mid.x, mid.y, mid.z));
+  }
+  for (const s of [-1, 1]) P.push(at(GK.blob(0.16, 0.16, 0.16, '#ffd166', { seed: 61 + s, lump: 0 }), -0.05, 1.12, s * 2.6));
+  return GK.merge(P);
+});
 
 // Where each body puts its seat and wheels.
 const BODY_SEAT = {
