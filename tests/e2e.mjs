@@ -1,5 +1,6 @@
 // End-to-end party test: starts the real server, opens the big screen and two emulated phones in
-// headless Chromium, and plays a party race with real phone input over the WebSocket relay.
+// headless Chromium, and plays a party race with real phone input over the WebSocket relay, then
+// starts the point-to-point mountain run and follows its sections on the phone.
 //
 //   npm run test:e2e
 //   node tests/e2e.mjs [--shots dir]
@@ -227,7 +228,7 @@ try {
       n++;
     }
   });
-  await host.waitForFunction(() => App.screen === 'results', null, { timeout: 20000 });
+  await host.waitForFunction(() => App.screen === 'results', null, { timeout: 40000 });
   const res = await host.evaluate(() => ({ rows: App.lastResults.length, bank: Save.data.bank, races: Save.data.races }));
   check('results with every racer', res.rows === 8, JSON.stringify(res));
   check('race coins go into the bank', res.bank > bankBefore - 20 && res.races === 1);
@@ -246,7 +247,11 @@ try {
         Sound.playSong(k);
         Sound.schedule();
       }
-      for (let i = 0; i < 4; i++) Engines.set(i, true, 0.5, i % 2 === 0);
+      for (let i = 0; i < 4; i++) {
+        Engines.set(i, true, 0.5, i % 2 === 0);
+        Engines.wind(i, 1, 0.5);
+      }
+      Engines.plane(0.8, 1.1);
       Engines.silence();
       Sound.playSong('results');
       return Sound.ctx ? '' : 'no audio context';
@@ -277,6 +282,39 @@ try {
   await host.click('#pauseQuit');
   await host.waitForFunction(() => App.screen === 'lobby', null, { timeout: 5000 });
   check('quit returns to the lobby with everyone seated', await host.evaluate(() => Party.list().length === 2));
+
+  // ---- the point-to-point mountain run ----
+  const cards = await host.evaluate(() => [...document.querySelectorAll('#trackPick .track-b')].map((b) => ({ id: b.dataset.track, pips: b.querySelectorAll('.pips b.on').length, text: b.textContent })));
+  check('lobby lists all four courses', cards.map((c) => c.id).join() === 'meadow,sherbet,magma,mount', cards.map((c) => c.id).join());
+  check('course cards show difficulty, and laps or sections', cards.map((c) => c.pips).join() === '1,2,3,4' && /\d laps?/.test(cards[0].text) && /Point-to-point/.test(cards[3].text) && /3 sections/.test(cards[3].text), cards.map((c) => c.text).join(' | '));
+  check('leader phone lists all four courses', (await ana.locator('#tracks button').count()) === 4);
+  await ana.click('#tracks button:has-text("Mount Wobble")');
+  await host.waitForFunction(() => Party.settings.track === 'mount', null, { timeout: 5000 });
+  await ana.waitForFunction(() => [...document.querySelectorAll('#sLaps button')].every((b) => b.disabled), null, { timeout: 5000 }).catch(() => {});
+  const lapsOff = (sel) => [...document.querySelectorAll(sel)].every((b) => b.disabled);
+  check('laps are disabled for a point-to-point run (phone and big screen)', (await ana.evaluate(lapsOff, '#sLaps button')) && (await host.evaluate(lapsOff, '#optLaps button')));
+  await ana.click('#leadStart');
+  await host.waitForFunction(() => App.screen === 'race' && App.race && App.race.track.id === 'mount', null, { timeout: 30000 });
+  check('one run in three sections, after the cargo-plane drop', await host.evaluate(() => App.race.p2p && App.race.laps === 1 && App.race.sections.length === 3 && App.race.opts.intro === 4.6));
+  await host.evaluate(() => {
+    const r = App.race;
+    while (r.state !== 'race') {
+      Party.readControls();
+      App.applyControls();
+      r.update(1 / 60);
+    }
+  });
+  await ana.waitForFunction(() => document.getElementById('hLap').textContent === 'Section 1/3', null, { timeout: 30000 }).catch(() => {});
+  check('phone HUD shows the section', (await ana.textContent('#hLap')) === 'Section 1/3', await ana.textContent('#hLap'));
+  await host.evaluate(() => EditPanel.skip()); // on to the next checkpoint
+  await ana.waitForFunction(() => document.getElementById('hLap').textContent === 'Section 2/3', null, { timeout: 30000 }).catch(() => {});
+  check('phone HUD follows the sections', (await ana.textContent('#hLap')) === 'Section 2/3', await ana.textContent('#hLap'));
+  check('the music follows the section', await host.evaluate(() => App.music === 'mount2'));
+  await shot(ana, 'phone-sections');
+  await host.keyboard.press('Escape');
+  await host.waitForSelector('#scr-pause:not([hidden])', { timeout: 10000 });
+  await host.click('#pauseQuit');
+  await host.waitForFunction(() => App.screen === 'lobby', null, { timeout: 10000 });
 
   // ---- a solo garage purchase on the big screen ----
   await host.evaluate(() => {

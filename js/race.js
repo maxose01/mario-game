@@ -96,7 +96,8 @@ class Race {
     }
     let plane = null;
     if (intro > 0) {
-      const after = this.introEnd >= 0 ? this.time - this.introEnd : 0;
+      // (an intro cut short from outside, e.g. a restart, never set introEnd: the plane is long gone)
+      const after = this.introEnd >= 0 ? this.time - this.introEnd : this.state === 'intro' ? 0 : Infinity;
       const up = u + after / intro;
       if (up < 1.8) {
         const p = T.main.point(T.startS, 0);

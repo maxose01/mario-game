@@ -163,6 +163,7 @@ function onMessage(m) {
       break;
     case 'go':
       P.haveResults = false;
+      $('hLap').textContent = m.secs ? `Section 1/${m.secs}` : `Lap 1/${P.settings ? P.settings.laps : 3}`;
       show('race');
       goFullscreen();
       break;
@@ -172,6 +173,8 @@ function onMessage(m) {
     case 'fx':
       if (P.opts.buzz && navigator.vibrate) navigator.vibrate(m.v);
       if (m.k === 'finallap') banner('FINAL LAP!');
+      if (m.k === 'section') banner(`Section ${m.n}` + (m.name ? '\n' + m.name : ''), 2);
+      if (m.k === 'finalsection') banner('FINAL SECTION!' + (m.name ? '\n' + m.name : ''), 2.2);
       if (m.k === 'key') banner('🔑 Find the gate!');
       if (m.k === 'gate') banner('Secret route!');
       break;
@@ -260,15 +263,23 @@ function renderLobby() {
   const rb = $('readyBtn');
   rb.textContent = P.ready ? '✓ Ready (tap to change)' : "I'm ready!";
   rb.classList.toggle('on', P.ready);
-  // leader controls
+  // leader controls: every course with its difficulty, laps (or sections) and secret route
   $('leadCard').hidden = !P.leader || !P.settings;
   if (P.leader && P.settings) {
     const tr = $('tracks');
     tr.innerHTML = '';
+    const laps = P.settings.laps;
     for (const t of P.tracks) {
-      const b = el('button', t.id === P.settings.track ? 'on' : '', t.name);
+      const b = el('button', t.id === P.settings.track ? 'on' : '');
       b.type = 'button';
-      b.appendChild(el('small', '', t.found ? '🔑 secret route found' : '🔒 secret route hidden'));
+      b.dataset.track = t.id;
+      const head = el('span', 'tt');
+      head.append(el('b', '', t.name), difficultyPips(t.difficulty));
+      b.appendChild(head);
+      const kind = t.sections ? `Point-to-point · ${t.sections} sections` : `${laps} lap${laps > 1 ? 's' : ''}`;
+      const bits = [kind, t.found ? '🔑 secret route found' : '🔒 secret route hidden'];
+      if (t.staff) bits.push('⏱ staff ' + t.staff);
+      b.appendChild(el('small', '', bits.join(' · ')));
       b.addEventListener('click', () => send({ t: 'lead', act: 'track', v: t.id }));
       tr.appendChild(b);
     }
@@ -279,6 +290,12 @@ function renderLobby() {
     mark('sCC', P.settings.cc);
     mark('sBots', P.settings.bots);
     mark('sItems', P.settings.items);
+    // a point-to-point course is one run: no laps to pick
+    const course = P.tracks.find((t) => t.id === P.settings.track);
+    const p2p = !!(course && course.sections);
+    for (const b of $('sLaps').children) b.disabled = p2p;
+    $('lapsNote').hidden = !p2p;
+    if (p2p) $('lapsNote').textContent = `${course.name} is one run from top to bottom in ${course.sections} sections.`;
   }
   const pl = $('players');
   pl.innerHTML = '';
@@ -288,6 +305,15 @@ function renderLobby() {
     s.style.setProperty('--c', SLOT_COLORS[q.slot]);
     pl.appendChild(s);
   }
+}
+
+// Four pips for a course's difficulty (1 easiest .. 4 hardest).
+function difficultyPips(n) {
+  n = U.clamp(n || 1, 1, 4);
+  const wrap = el('i', 'pips d' + n);
+  wrap.setAttribute('aria-label', `Difficulty ${n} of 4`);
+  for (let i = 0; i < 4; i++) wrap.appendChild(el('b', i < n ? 'on' : ''));
+  return wrap;
 }
 
 function describe(part) {
@@ -501,7 +527,7 @@ function animateWheel() {
 function renderHud(m) {
   if (P.phase !== 'race') show('race');
   $('hPlace').textContent = ordinal(m.place);
-  $('hLap').textContent = `Lap ${m.lap}/${m.laps}`;
+  $('hLap').textContent = m.secs ? `Section ${m.sec}/${m.secs}` : `Lap ${m.lap}/${m.laps}`;
   $('hCoins').textContent = m.coins;
   $('hKey').hidden = !m.key;
   const box = $('hItem');
@@ -542,6 +568,8 @@ function renderResults(m) {
   P.haveResults = true;
   $('rPlace').textContent = m.place ? ordinal(m.place) : 'Finished';
   $('rEarned').textContent = `+${m.earned} coins · bank ${m.bank}`;
+  $('rNote').hidden = !m.note;
+  $('rNote').textContent = m.note || '';
   P.bank = m.bank;
   const ol = $('rList');
   ol.innerHTML = '';

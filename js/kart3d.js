@@ -2,8 +2,10 @@
 // Clay karts and their drivers, built from lumpy primitives. A kart is a group of:
 // paint (the body panels, tinted by the paint colour so Rainbow and Gold can shimmer),
 // details (seat, engine, the driver's body), the driver's head (turns into corners and bobs on
-// the stop-motion beat), four wheels and a soft contact shadow.
-// Models face +X with the wheels resting on y = 0.
+// the stop-motion beat), four wheels and a soft contact shadow. Race karts also get a folding
+// glider behind the seat and hover glows for anti-gravity road (KartModels.racing).
+// Models face +X with the wheels resting on y = 0. On the road a kart is posed in the road's
+// own frame: it pitches with the slope and rolls with the banking (k.slopePitch, k.bank).
 
 const WHEEL_SPECS = {
   standard: { r: 0.4, w: 0.34 },
@@ -137,10 +139,12 @@ const KartModels = {
     return m;
   },
 
-  // Real-time shadows from the kart (not the staff ghost's).
+  // Real-time shadows from (and onto) the kart's clay; the glows never cast. Not for ghosts.
   castShadows(m, on = true) {
     m.group.traverse((o) => {
-      if (o.isMesh && o.material !== m.hoverMat && o !== m.hoverPool) o.castShadow = on;
+      if (!o.isMesh || o.material === m.hoverMat || o === m.hoverPool) return;
+      o.castShadow = on;
+      o.receiveShadow = on;
     });
   },
 
@@ -503,20 +507,67 @@ function buildWheel(kind) {
   return GK.merge(P);
 }
 
-// Pose a kart model from simulation state. m = KartModels.build() result.
-function poseKart(m, k, time, dt) {
+// Scratch objects for posing (nothing is allocated per frame).
+const POSE = {
+  q: new THREE.Quaternion(), r: new THREE.Quaternion(), m: new THREE.Matrix4(),
+  X: new THREE.Vector3(1, 0, 0), Y: new THREE.Vector3(0, 1, 0), Z: new THREE.Vector3(0, 0, 1),
+  f: new THREE.Vector3(), n: new THREE.Vector3(), s: new THREE.Vector3(),
+};
+
+// Orient q so that local +X runs along heading `head` over the road surface at loc (a
+// track.locate / project result) and local +Y is the road's normal. The road climbs `slope`
+// per unit along its tangent and drops loc.bank per unit to its right. Leaves the normal in
+// POSE.n. Contact shadows and hazards use it to sit flush on banked and sloping roads.
+function roadFrameQuat(loc, slope, head, q) {
+  const P = POSE;
+  const b = loc.bank || 0;
+  // the normal of the plane y = slope * (t . p) - bank * (n . p)
+  P.n.set(-(slope * loc.tx - b * loc.nx), 1, -(slope * loc.tz - b * loc.nz)).normalize();
+  P.f.set(Math.cos(head), 0, Math.sin(head));
+  P.f.addScaledVector(P.n, -P.f.dot(P.n)).normalize();
+  P.s.crossVectors(P.f, P.n);
+  P.m.makeBasis(P.f, P.n, P.s);
+  return q.setFromRotationMatrix(P.m);
+}
+
+// Pose a kart model from simulation state. m = KartModels.build() result (with racing()
+// extras for race karts); io = the cargo-plane intro offset {y, glide} (or null).
+function poseKart(m, k, time, dt, io) {
   const v = k.vis;
   const g = m.group;
-  g.position.set(k.x, k.y, k.z);
-  let yaw = -k.head;
-  if (k.spinT > 0) yaw -= v.spin;
+  const P = POSE;
+  const lift = io ? io.y || 0 : 0;
+  // anti-gravity: the wheels fold flat under the kart and it hovers a little
+  const ag = U.clamp(k.agBlend || 0, 0, 1);
+  const fold = ag * ag * (3 - 2 * ag);
+  const hover = fold * (0.24 + Math.sin(time * 5 + k.idx) * 0.05);
+  g.position.set(k.x, k.y + lift + hover, k.z);
+  // heading, then the road's pitch and roll under the kart (eased by the sim and level in the
+  // air, where a glider banks into its turns instead), then spins about the kart's own up axis
+  let pitch = k.slopePitch;
+  if (pitch === undefined) pitch = k.onGround && k.loc ? Math.atan(k.loc.slope * Math.cos(k.head - Math.atan2(k.loc.tz, k.loc.tx))) : 0;
+  m.glideBank = U.lerp(m.glideBank || 0, k.gliding ? (k.steer || 0) * 0.4 : 0, 1 - Math.exp(-5 * dt));
+  P.q.setFromAxisAngle(P.Y, -k.head);
+  P.r.setFromAxisAngle(P.Z, pitch || 0);
+  P.q.multiply(P.r);
+  P.r.setFromAxisAngle(P.X, (k.bank || 0) + m.glideBank);
+  P.q.multiply(P.r);
+  // a spin-out, or the quick twirl of an anti-gravity spin boost (sbT runs 1 -> 0)
+  let spin = k.spinT > 0 ? v.spin : 0;
+  if (m.sbT > 0) {
+    m.sbT = Math.max(0, m.sbT - dt * 2.4);
+    spin += TAU * (1 - m.sbT * m.sbT);
+  }
+  if (spin) {
+    P.r.setFromAxisAngle(P.Y, -spin);
+    P.q.multiply(P.r);
+  }
+  g.quaternion.copy(P.q);
   if (v.spinTrick > 0) {
     v.spinTrick = Math.max(0, v.spinTrick - dt * 3);
   }
-  g.rotation.set(0, yaw, 0);
-  // follow the road slope on the ground
-  const slope = k.onGround && k.loc ? k.loc.slope * Math.cos(k.head - Math.atan2(k.loc.tz, k.loc.tx)) : 0;
-  m.body.rotation.set(v.roll + (k.vis.spinTrick > 0 ? Math.sin(v.spinTrick * Math.PI) * 0.6 : 0), 0, Math.atan(slope) + v.pitch, 'YXZ');
+  // the body leans out of turns and flips for tricks on top of that
+  m.body.rotation.set(v.roll + (v.spinTrick > 0 ? Math.sin(v.spinTrick * Math.PI) * 0.6 : 0), 0, v.pitch, 'YXZ');
   // squash on landing, flatten when stomped
   const sq = k.squishT > 0 ? 0.45 : 1 + (v.squash || 0) * -1;
   m.body.scale.set(1 + (1 - sq) * 0.35, sq, 1 + (1 - sq) * 0.35);
@@ -528,28 +579,62 @@ function poseKart(m, k, time, dt) {
   for (const w of m.wheels) {
     // wheels on the left are mirrored (hub outward), so they spin the other way round
     w.mesh.rotation.z = (-v.wheel / Math.max(0.3, m.geo.wheelR)) * w.side;
-    w.holder.rotation.y = w.front ? -k.steer * 0.42 : 0;
+    // anti-gravity: each wheel tips flat, hub to the road, and tucks in a little
+    w.holder.rotation.set((w.side * fold * Math.PI) / 2, w.front ? -k.steer * 0.42 * (1 - fold) : 0, 0, 'YXZ');
+    if (w.base) w.holder.position.set(w.base.x, w.base.y, w.base.z * (1 - 0.1 * fold));
+    if (w.glow) w.glow.visible = fold > 0.02;
   }
-  // paint effects: rainbow cycles, star flashes
+  if (m.hoverMat) {
+    m.hoverMat.opacity = fold * (0.75 + 0.25 * Math.sin(time * 11 + k.idx));
+    m.hoverPool.visible = fold > 0.02;
+    m.hoverPool.material.opacity = fold * 0.55;
+    m.hoverPool.position.y = 0.08 - hover;
+  }
+  if (m.glider) poseGlider(m, k, time, dt, !!(k.gliding || (io && io.glide)));
+  // paint effects: rainbow cycles, star flashes, a staff ghost shimmers
   if (m.special === 'rainbow') m.paintMat.color.setHSL((time * 0.25) % 1, 0.75, 0.6);
   if (k.starT > 0) {
     const c = m.paintMat.emissive.setHSL((time * 3) % 1, 1, 0.5);
     m.detailMat.emissive.copy(c).multiplyScalar(0.6);
+  } else if (m.ghost) {
+    m.paintMat.opacity = m.detailMat.opacity = 0.36 + Math.sin(time * 3 + k.idx) * 0.06;
   } else if (m.paintMat.emissive.r || m.paintMat.emissive.g || m.paintMat.emissive.b) {
     m.paintMat.emissive.setRGB(0, 0, 0);
     m.detailMat.emissive.setRGB(0, 0, 0);
   }
   if (m.shadow) {
     const gy = k.loc ? k.track.groundY(k.loc) : -Infinity;
-    if (gy === -Infinity || k.falling) m.shadow.visible = false;
+    if (gy === -Infinity || k.falling || m.ghost || !(k.loc.excess < 1)) m.shadow.visible = false;
     else {
+      // lies on the road (banked or not) under the kart, fading as it rises
       m.shadow.visible = true;
-      m.shadow.position.set(k.x, gy + 0.12, k.z);
-      m.shadow.rotation.y = -k.head;
-      const h = Math.max(0, k.y - gy);
+      const slope = (k.loc.slope || 0) + (k.track.zoneSlope ? k.track.zoneSlope(k.loc) : 0);
+      roadFrameQuat(k.loc, slope, k.head, m.shadow.quaternion);
+      m.shadow.position.set(k.x, gy, k.z).addScaledVector(P.n, 0.12);
+      const h = Math.max(0, k.y + lift - gy);
       const s = 1 / (1 + h * 0.25);
-      m.shadow.scale.set(s, 1, s);
-      m.shadow.material.opacity = s;
+      // with real-time sun shadows on it is only a soft contact shade under the wheels
+      const real = CFG.shadows ? 0.78 : 1;
+      m.shadow.scale.set(s * real, 1, s * real);
+      m.shadow.material.opacity = s * (CFG.shadows ? 0.42 : 1);
     }
   }
+}
+
+// The glider springs open over ~0.45 s from the moment it opens (k.glideT, or its own clock
+// for the intro drop) and tucks away behind the seat on landing. It banks into turns.
+function poseGlider(m, k, time, dt, open) {
+  if (open) m.glideAge = k.gliding ? k.glideT || 0 : (m.glideAge || 0) + dt;
+  else m.glideAge = 0;
+  if (open) m.glideOpen = Math.max(U.clamp(m.glideAge / 0.45, 0, 1), Math.min(1, m.glideOpen));
+  else m.glideOpen = Math.max(0, m.glideOpen - dt * 4);
+  const f = m.glideOpen, gl = m.glider;
+  gl.visible = f > 0.01;
+  if (!gl.visible) return;
+  const e = open ? U.easeOutBack(f) : f * f;
+  gl.scale.set(0.3 + 0.7 * e, 0.25 + 0.75 * e, Math.max(0.04, e));
+  const sway = Math.sin(time * 6.5 + k.idx) * 0.035 * f;
+  // folded: swung back and down behind the seat; open: level, rolling into the turn
+  gl.rotation.set((k.steer || 0) * 0.28 * f + sway, 0, 1.25 * (1 - Math.min(1, e)), 'XYZ');
+  gl.position.y = m.geo.headPos.y - 0.35 + Math.sin(time * 9 + k.idx) * 0.03 * f;
 }

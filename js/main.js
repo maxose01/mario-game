@@ -2,6 +2,11 @@
 // The big-screen app: boots the renderer, runs the fixed-timestep loop, moves between the
 // title (an attract-mode race), lobby, garage, race and results, routes race events to the
 // speakers and the phones, and keeps the resolution comfortable on slow TVs.
+// On a point-to-point run the music follows the sections (whichever human is furthest along
+// picks the song), and a racer alone on the course without bots gets a staff ghost to chase.
+
+// The staff ghost's kart: the fastest stock build (course staff times are set with it).
+const STAFF_KART = { character: 'mudlet', body: 'classic', wheels: 'standard', paint: 'gold' };
 
 const App = {
   screen: null,
@@ -199,10 +204,14 @@ const App = {
   },
 
   // ---------- 3D backdrops ----------
-  startDemo() {
+  // The title screen's attract-mode race, on a random course (avoid: a course id to skip).
+  startDemo(avoid) {
     if (this.demo) return;
     const rnd = U.rng((Math.random() * 1e9) | 0);
-    const track = TRACK_DEFS[Math.floor(rnd() * TRACK_DEFS.length)].id;
+    const others = TRACK_DEFS.filter((t) => t.id !== avoid);
+    const pool = others.length ? others : TRACK_DEFS;
+    const track = pool[Math.floor(rnd() * pool.length)].id;
+    this.demoEndT = 0;
     const racers = [];
     for (let i = 0; i < 8; i++) {
       const cfg = randomKart(rnd);
@@ -216,6 +225,18 @@ const App = {
     if (!this.demo) return;
     this.demoView.dispose();
     this.demo = this.demoView = null;
+  },
+  // A point-to-point attract race never finishes (its bots park in the run-out), so a couple
+  // of seconds after its leader reaches the finish line the show moves on to another course.
+  watchDemo(dt) {
+    const d = this.demo;
+    if (!d.p2p || !(d.goal > 0)) return;
+    if (d.leaderS < d.goal - 20) return;
+    this.demoEndT += dt;
+    if (this.demoEndT < 2.5) return;
+    const was = d.track.id;
+    this.stopDemo();
+    this.startDemo(was);
   },
 
   refreshShowroom() {
@@ -256,18 +277,29 @@ const App = {
       used.push(cfg.character);
       racers.push({ name: findPart('character', cfg.character).name, config: cfg, bot: true });
     }
-    this.race = new Race({ track: s.track, laps: s.laps, cc: s.cc, racers, items: s.items, intro: 2.6 });
+    // racing alone without bots: the staff ghost shows the way (and the time to beat)
+    if (this.staffGhostOn()) racers.push({ name: 'Staff Ghost', bot: true, ghost: true, config: Object.assign({}, STAFF_KART) });
+    const def = TRACK_DEFS.find((t) => t.id === s.track) || {};
+    // the cargo-plane drop takes longer than the usual sweep down the start straight
+    this.race = new Race({ track: s.track, laps: s.laps, cc: s.cc, racers, items: s.items, intro: def.planeDrop ? 4.6 : 2.6 });
     this.view = new RaceView(this.race, humans.map((p) => ({ slot: p.slot, idx: p.kartIdx, touch: p.src === 'touch' })));
     this.raceDoneT = 0;
     this.paused = false;
     this.screen = 'race';
+    this.audio = { wet: [], splashAt: [], rings: [], plane: null, drop: false };
     Screens.show(null);
     this.showTouch();
     Sound.tempoMul = 1;
-    Sound.playSong(this.race.track.def.music);
+    this.music = this.raceMusic();
+    Sound.playSong(this.music);
     Party.sendState();
-    Party.broadcast({ t: 'go', track: this.race.track.def.name });
+    const secs = this.race.p2p && this.race.sections ? this.race.sections.length : 0;
+    Party.broadcast({ t: 'go', track: this.race.track.def.name, secs });
     $('gl').focus && $('gl').focus();
+  },
+  // A lone racer with bots off races the staff ghost (Edit Panel: Bots).
+  staffGhostOn() {
+    return !!CFG.staffGhost && !Party.settings.bots && Party.list().length === 1;
   },
 
   endRace() {
@@ -334,7 +366,7 @@ const App = {
       this.raceEvents(events);
       this.view.update(frozen ? 0 : dt * CFG.timeScale, events);
       Party.sendRaceHud(this.race, dt);
-      this.engineSounds(frozen);
+      this.engineSounds(frozen, dt);
       if (this.race.state === 'done') {
         this.raceDoneT += dt;
         if (this.raceDoneT > 1.2) this.showResults();
@@ -351,6 +383,7 @@ const App = {
         if (n >= 3) acc = 0;
       }
       this.demoView.update(dt, this.demo.drainEvents());
+      if (!frozen) this.watchDemo(dt);
     } else if (this.showroom) {
       this.showroom.update(dt);
       acc = 0;
@@ -358,19 +391,99 @@ const App = {
     return acc;
   },
 
-  engineSounds(frozen) {
+  // Continuous sounds: an engine hum per view, wind while gliding (or dropping out of the
+  // cargo plane), the plane's drone during the intro, and splashes into water.
+  engineSounds(frozen, dt) {
     const race = this.race;
+    const intro = race.state === 'intro';
+    const planeDrop = !!(race.track.def.planeDrop && race.introOffset);
     this.view.views.forEach((v, i) => {
       const k = race.karts[v.idx];
-      const on = !frozen && race.state !== 'intro' && !k.falling;
-      Engines.set(i, on, U.clamp(Math.abs(k.vf) / (CFG.topSpeed * 1.25), 0, 1), k.boostT > 0);
+      const on = !frozen && !intro && !k.falling;
+      const speed01 = U.clamp(Math.abs(k.vf) / (CFG.topSpeed * 1.25), 0, 1);
+      Engines.set(i, on, speed01, k.boostT > 0);
+      const dropping = planeDrop && intro && race.introOffset(k).glide;
+      const wind = frozen || k.falling ? 0 : k.gliding ? 0.6 + speed01 * 0.4 : dropping ? 0.7 : 0;
+      Engines.wind(i, wind, k.gliding ? speed01 : 0.6);
     });
+    if (planeDrop) this.planeSounds(frozen, dt);
+    if (!frozen) this.splashes();
   },
 
-  // Sounds, haptics and save-worthy moments from the race.
+  // The cargo-plane intro: the drone swells as the plane passes over the first view's camera
+  // and drops in pitch as it flies away (Doppler), with a whoosh as everyone jumps out and a
+  // thump as they land. The plane is gone a few seconds into the countdown.
+  planeSounds(frozen, dt) {
+    const race = this.race, a = this.audio, v = this.view.views[0];
+    if (!a || a.planeGone || !v) return;
+    if (frozen) return Engines.plane(0);
+    const io = race.introOffset(race.karts[v.idx]);
+    if (race.state === 'intro') {
+      if (io.glide && !a.drop) {
+        a.drop = true;
+        Sound.play('glide');
+      } else if (!io.glide && a.drop && !a.landed) {
+        a.landed = true;
+        Sound.play('land');
+      }
+    }
+    if (!io.plane) {
+      if (race.state !== 'intro') {
+        a.planeGone = true;
+        Engines.plane(0);
+      }
+      return;
+    }
+    const p = v.cam.position, q = io.plane;
+    const d = Math.hypot(q.x - p.x, q.y - p.y, q.z - p.z);
+    const recede = a.plane !== null && dt > 0 ? (d - a.plane) / dt : 0; // units/s away from us
+    a.plane = d;
+    a.rate = U.lerp(a.rate || 1, U.clamp(1 - recede / 420, 0.78, 1.22), 0.2);
+    Engines.plane(Math.pow(U.clamp(1.25 - d / 170, 0, 1), 1.5), a.rate);
+  },
+
+  // Are this kart's tyres in water (shallows, a water channel, a current)?
+  isWet(k) {
+    const loc = k.loc, T = this.race.track;
+    if (!k.onGround || k.falling || !loc || !loc.path || loc.excess > 0.5) return false;
+    return k.surface === 'shallow' || (loc.path.style && loc.path.style[loc.i] === 'water') || !!T.zoneAt(loc, 'current');
+  },
+  // A splash when a human racer drives (or lands) into water (at most every half second, so
+  // skimming the edge of the shallows doesn't rattle).
+  splashes() {
+    const race = this.race, a = this.audio;
+    for (const k of race.humans) {
+      const wet = this.isWet(k);
+      if (wet && !a.wet[k.idx] && !(race.time - a.splashAt[k.idx] < 0.5)) {
+        Sound.play('splash');
+        a.splashAt[k.idx] = race.time;
+      }
+      a.wet[k.idx] = wet;
+    }
+  },
+
+  // Is any human racer within r units of a spot (and roughly level with it, since mountain
+  // roads pass above and below each other)?
+  near(p, r) {
+    return !!p && this.race.humans.some((h) => (h.x - p.x) ** 2 + (h.z - p.z) ** 2 < r * r && Math.abs(h.y - p.y) < 25);
+  },
+
+  // The song for the race: the course's own, or on a point-to-point run the song of the
+  // section that the human furthest along has reached.
+  raceMusic() {
+    const race = this.race, T = race.track, secs = race.sections;
+    if (!race.p2p || !secs || !secs.length) return T.def.music;
+    let lead = null;
+    for (const h of race.humans) if (!lead || h.totalS > lead.totalS) lead = h;
+    const n = lead ? lead.section || T.sectionAt(T.startS + lead.totalS) : 1;
+    const sec = secs[U.clamp(n, 1, secs.length) - 1];
+    return (sec && sec.music) || T.def.music;
+  },
+
+  // Sounds, haptics and save-worthy moments from the race. Effects play for the humans' own
+  // karts, or for things happening near one of them.
   raceEvents(events) {
     const race = this.race;
-    let music = race.track.def.music;
     for (const e of events) {
       Party.raceEvent(e);
       const k = e.kart;
@@ -389,7 +502,8 @@ const App = {
           if (mine) Sound.play('sparks' + e.a);
           break;
         case 'boost':
-          if (mine) Sound.play('boost');
+          // rings and anti-gravity spins have their own sounds
+          if (mine && e.a !== 'ring' && e.a !== 'spin') Sound.play('boost');
           break;
         case 'box':
           if (mine) Sound.play('box');
@@ -401,7 +515,7 @@ const App = {
           if (mine && ['banana', 'green', 'red', 'bomb'].includes(e.a)) Sound.play('throw');
           break;
         case 'hit':
-          if (mine) Sound.play(e.a === 'banana' ? 'slip' : 'hit');
+          if (mine) Sound.play(e.a === 'banana' || e.a === 'penguin' || e.a === 'skier' ? 'slip' : 'hit');
           break;
         case 'squish':
           if (mine) Sound.play('squish');
@@ -432,11 +546,53 @@ const App = {
         case 'finallap':
           if (mine) {
             Sound.play('finallap');
-            Sound.tempoMul = 1.12;
+            if (!race.p2p) Sound.tempoMul = 1.12; // a point-to-point run changes songs instead
           }
+          break;
+        case 'section':
+          if (mine) Sound.play('section');
+          break;
+        case 'finalsection':
+          if (mine) Sound.play('finalsection');
           break;
         case 'finish':
           if (mine) Sound.play('finish');
+          break;
+        case 'glide':
+          if (mine) Sound.play('glide');
+          break;
+        case 'ring': {
+          if (!mine) break;
+          // rings flown in a row chime up the scale
+          const r = this.audio.rings[k.idx] || (this.audio.rings[k.idx] = { n: 0, t: -9 });
+          r.n = race.time - r.t < 2.5 ? r.n + 1 : 0;
+          r.t = race.time;
+          Sound.play('ring', r.n);
+          break;
+        }
+        case 'spinboost':
+          if (mine) Sound.play('spinboost');
+          break;
+        case 'launch':
+          if (mine) Sound.play('launch');
+          break;
+        case 'squash':
+          if (mine) Sound.play('bonk');
+          break;
+        case 'moo':
+          if (mine || this.near(e.a, 40)) Sound.play('moo');
+          break;
+        case 'bumper':
+          if (mine || this.near(e.a, 30)) Sound.play('bumper');
+          break;
+        case 'mole':
+          if (this.near(e.a, 35)) Sound.play('mole');
+          break;
+        case 'geyser':
+          if (this.near(e.a, 45)) Sound.play('geyser', e.a.look);
+          break;
+        case 'icicle':
+          if (this.near(e.a, 40)) Sound.play('icicle');
           break;
         case 'bump':
           if (mine || (e.a && !e.a.bot)) Sound.play('bump');
@@ -445,7 +601,7 @@ const App = {
           if (mine && e.a > 8) Sound.play('wall');
           break;
         case 'land':
-          if (mine) Sound.play('land');
+          if (mine && !this.isWet(k)) Sound.play('land'); // into water it splashes instead
           break;
         case 'fall':
           if (mine) Sound.play('fall');
@@ -460,7 +616,7 @@ const App = {
           Sound.play('blast');
           break;
         case 'stomp':
-          if (race.humans.some((h) => Math.hypot(h.x - e.a.x, h.z - e.a.z) < 45)) Sound.play('stomp');
+          if (this.near(e.a, 45)) Sound.play('stomp');
           break;
         case 'trick':
           if (mine) Sound.play('trick');
@@ -473,8 +629,12 @@ const App = {
           break;
       }
     }
+    // music: the course (or section) song, the star song while a human has star power; a new
+    // section's song comes in on the next bar line
+    let music = this.raceMusic();
     if (race.humans.some((h) => h.starT > 0)) music = 'star';
-    if (Sound.songName !== music) Sound.playSong(music);
+    this.music = music;
+    if (Sound.songName !== music || Sound.queued) Sound.playSong(music, music !== 'star' && Sound.songName !== 'star');
   },
 
   showResults() {
@@ -500,11 +660,14 @@ const App = {
     Save.data.races++;
     Save.persist();
     news.unshift(`+${earned} coins to the garage bank (now ${Save.data.bank})`);
+    const staff = this.staffNews(race, rows);
+    if (staff) news.push(staff);
     this.lastResults = rows;
+    const secs = race.p2p && race.sections ? race.sections.length : 0;
     this.endRace();
     this.screen = 'results';
     Screens.show('results');
-    Screens.renderResults(rows, news);
+    Screens.renderResults(rows, news, secs);
     this.refreshShowroom();
     this.showTouch();
     Sound.tempoMul = 1;
@@ -513,8 +676,22 @@ const App = {
     for (const p of Party.list()) {
       if (p.kind !== 'phone' || !p.connected) continue;
       const mine = rows.find((r) => r.slot === p.slot);
-      Party.link.send(p.pid, { t: 'results', place: mine ? mine.place : 0, n, earned: mine ? mine.earned : 0, bank: Save.data.bank, rows: rows.slice(0, 8).map((r) => ({ place: r.place, name: r.name, slot: r.slot, time: fmtTime(r.time) })) });
+      Party.link.send(p.pid, { t: 'results', place: mine ? mine.place : 0, n, earned: mine ? mine.earned : 0, bank: Save.data.bank, note: staff, rows: rows.slice(0, 8).map((r) => ({ place: r.place, name: r.name, slot: r.slot, time: fmtTime(r.time) })) });
     }
+  },
+
+  // The best human finish against the course's staff time for this engine class (when the
+  // course has one), or else against the staff ghost if one raced.
+  staffNews(race, rows) {
+    const me = rows.filter((r) => r.slot >= 0 && r.finished).sort((a, b) => a.time - b.time)[0];
+    if (!me) return '';
+    const gap = (t) => Math.abs(me.time - t).toFixed(2) + ' s';
+    const def = race.track.def;
+    const staff = def.staff && def.staff[race.ccName];
+    if (staff > 0) return me.time <= staff ? `Staff time ${fmtTime(staff)} beaten by ${gap(staff)}!` : `Staff time ${fmtTime(staff)}: ${gap(staff)} to go`;
+    if (!race.karts.some((k) => k.ghost)) return '';
+    const g = race.ghostTime || 0;
+    return g > 0 && g < me.time ? `The Staff Ghost won by ${gap(g)}` : `You beat the Staff Ghost${g > 0 ? ' by ' + gap(g) : ''}!`;
   },
 
   // ---------- drawing ----------

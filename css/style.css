@@ -293,30 +293,91 @@ canvas:focus-visible {
 }
 .track-pick {
   display: grid;
-  gap: 0.35em;
+  gap: 0.3em;
 }
+/* compact course cards: map | name / difficulty + kind of race / secret route, staff time */
 #frame .track-b {
   display: grid;
-  grid-template-columns: auto 1fr;
-  grid-template-rows: auto auto;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
   align-items: center;
   column-gap: 0.5em;
   text-align: left;
   border-radius: 0.8em;
-  padding: 0.3em 0.5em;
+  padding: 0.28em 0.5em;
   background: var(--cream-2);
 }
 .track-b canvas {
-  grid-row: 1 / span 2;
-  width: 5.6em !important;
-  height: 3.2em !important;
+  grid-row: 1 / span 3;
+  width: 4.8em !important;
+  height: 2.9em !important;
+}
+.track-b .tn,
+.track-b .tk,
+.track-b .tf {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .track-b .tn {
-  font: 700 0.95em var(--font-display);
+  font: 700 0.92em/1.15 var(--font-display);
+}
+.track-b .tk {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  font: 800 0.62em/1.25 var(--font-body);
 }
 .track-b .tf {
-  font-size: 0.65em;
+  display: flex;
+  font-size: 0.6em;
+  line-height: 1.25;
   color: var(--ink-soft);
+}
+.track-b .tf span {
+  flex: none;
+}
+.track-b .tf span + span::before {
+  content: '·';
+  margin: 0 0.35em;
+}
+.track-b .tf .sr {
+  flex: 0 1 auto;
+  min-width: 2.4em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pips {
+  display: inline-flex;
+  flex: none;
+  gap: 0.2em;
+}
+.pips b {
+  width: 0.7em;
+  height: 0.7em;
+  border-radius: 50%;
+  background: rgba(59, 36, 64, 0.14);
+  box-shadow: 0 0 0 0.09em rgba(59, 36, 64, 0.4), inset 0 -0.14em 0 rgba(59, 36, 64, 0.2);
+}
+.pips.d1 b.on {
+  background: #58c056;
+}
+.pips.d2 b.on {
+  background: #f0b129;
+}
+.pips.d3 b.on {
+  background: #f4822f;
+}
+.pips.d4 b.on {
+  background: #f2557d;
+}
+.opt-note {
+  margin: -0.35em 0 0;
+  font-size: 0.6em;
+  font-weight: 800;
+  color: var(--ink-soft);
+  text-align: right;
 }
 .opt-row {
   display: flex;
@@ -588,8 +649,8 @@ canvas:focus-visible {
 }
 .howto-cols {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1em;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.9em;
   flex: 1 1 auto;
 }
 .howto-cols p {
@@ -682,6 +743,21 @@ table.results td.who {
 table.results tr.human {
   background: color-mix(in srgb, var(--sc) 22%, transparent);
   font-weight: 800;
+}
+/* point-to-point runs: time per section instead of the best lap */
+table.results.p2p td.splits {
+  font-size: 0.9em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+table.results.p2p th:nth-child(2) {
+  width: 32%;
+}
+table.results.p2p th:nth-child(3) {
+  width: 17%;
+}
+table.results.p2p th:nth-child(4) {
+  width: 31%;
 }
 .results-actions {
   display: flex;

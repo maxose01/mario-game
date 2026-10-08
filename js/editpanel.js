@@ -36,6 +36,7 @@ const EditPanel = {
     $('editToggle').setAttribute('aria-expanded', String(this.open));
     document.body.classList.toggle('panel-open', this.open);
     window.dispatchEvent(new Event('resize'));
+    this.skipLabel();
   },
 
   build() {
@@ -62,7 +63,7 @@ const EditPanel = {
       ['Open every gate', () => this.openGates()],
       ['Star power', () => this.forHumans((k) => (k.starT = CFG.starTime), 'Star power!')],
       ['Max coins (10)', () => this.forHumans((k) => (k.coins = 10), 'Pockets full of coins')],
-      ['Skip a lap', () => this.forHumans((k) => (k.totalS += App.race.track.length), 'Lap skipped')],
+      ['Skip a lap', () => this.skip()], // "Skip a section" on a point-to-point run
       ['Finish the race', () => this.finishRace()],
       ['Restart the race', () => (App.race ? App.leaderAction('restart') : this.flash('Start a race first'))],
       ['+100 garage coins', () => {
@@ -88,6 +89,7 @@ const EditPanel = {
         b.blur();
       });
       act.appendChild(b);
+      if (label === 'Skip a lap') this.skipBtn = b;
     }
     const isel = $('epItemSel');
     isel.innerHTML = '';
@@ -159,6 +161,41 @@ const EditPanel = {
     if (!r || App.screen !== 'race') return this.flash('Start a race first');
     for (const k of r.order) if (!k.finished) r.finish(k);
     r.state = 'done';
+  },
+  // Skip a lap on a circuit. On a point-to-point run, carry the human karts to just past the
+  // next checkpoint arch (or to just short of the finish line from the last section), keeping
+  // their speed: the race counts the jump like a rescue, so the section banner, music and
+  // phones all follow as if they had driven there.
+  skip() {
+    const r = App.race;
+    if (!r || App.screen !== 'race') return this.flash('Start a race first');
+    const T = r.track;
+    if (!r.p2p) return this.forHumans((k) => (k.totalS += T.lapLen || T.length), 'Lap skipped');
+    if (r.state !== 'race') return this.flash('Wait for the start');
+    let to = '';
+    const secs = r.sections || [];
+    this.forHumans((k) => {
+      if (k.finished) return;
+      // sections are 1-based and the first starts at the start line: the next one is secs[n]
+      const n = U.clamp(k.section || T.sectionAt(T.startS + k.totalS), 1, Math.max(1, secs.length));
+      const next = secs[n];
+      const p = T.main.point(next ? next.s + 2 : T.finishS - 6, 0);
+      const speed = Math.max(k.speed, 12);
+      const was = k.lastMainS;
+      k.falling = false;
+      k.rescueFrom = null;
+      k.setPos(p.x, p.y + 0.05, p.z, p.head);
+      k.lastMainS = was;
+      k.teleported = true;
+      k.vx = Math.cos(p.head) * speed;
+      k.vz = Math.sin(p.head) * speed;
+      to = next ? next.name : 'the finish';
+    });
+    this.flash(to ? 'Skipped to ' + to : 'Everyone is home already');
+  },
+  // The skip button says what it will skip in the race that's on.
+  skipLabel() {
+    if (this.skipBtn) this.skipBtn.textContent = App.race && App.race.p2p ? 'Skip a section' : 'Skip a lap';
   },
 
   row(p) {
@@ -293,6 +330,7 @@ const EditPanel = {
 
   refreshStats() {
     if (!this.open) return;
+    this.skipLabel();
     const lines = [];
     lines.push(['FPS', `${App.fps}  (${App.pxW}×${App.pxH} px)`]);
     lines.push(['Screen', App.screen + (App.paused ? ' (paused)' : '')]);
@@ -300,12 +338,24 @@ const EditPanel = {
     const r = App.race;
     if (r && App.screen === 'race') {
       const k = r.karts.find((q) => !q.bot) || r.order[0];
-      lines.push(['Course', `${r.track.def.name}, ${r.state}, ${fmtTime(r.raceTime)}`]);
+      const T = r.track;
+      lines.push(['Course', `${T.def.name}${r.p2p ? ' (point-to-point)' : ''}, ${r.state}, ${fmtTime(r.raceTime)}`]);
       lines.push(['Speed', `${k.speed.toFixed(1)} / ${(k.maxNow || 0).toFixed(1)} u/s`]);
       lines.push(['Surface', k.surface + (k.onGround ? '' : ` (air ${k.airT.toFixed(2)}s)`)]);
       lines.push(['Drift', k.drift ? `${k.drift > 0 ? 'right' : 'left'}, ${k.driftT.toFixed(2)}s, level ${k.driftLevel}` : '—']);
       lines.push(['Boost', k.boostT > 0 ? `${k.boostKind} ${k.boostT.toFixed(2)}s` : '—']);
-      lines.push(['Race', `place ${k.place}/${r.karts.length}, lap ${k.lap}/${r.laps}, ${((k.totalS / r.track.length) * 100).toFixed(0)}% of a lap`]);
+      const field = r.order ? r.order.length : r.karts.length;
+      if (r.p2p) {
+        // sections of the run, and how much of it is behind you
+        const secs = r.sections || [];
+        const n = U.clamp(k.section || 1, 1, Math.max(1, secs.length));
+        const name = secs[n - 1] ? ` (${secs[n - 1].name})` : '';
+        lines.push(['Race', `place ${k.place}/${field}, section ${n}/${secs.length}${name}, ${((k.totalS / (r.goal || T.lapLen)) * 100).toFixed(0)}% of the run`]);
+      } else {
+        const lapLen = T.lapLen || T.length;
+        lines.push(['Race', `place ${k.place}/${field}, lap ${k.lap}/${r.laps}, ${(((((k.totalS / lapLen) % 1) + 1) % 1) * 100).toFixed(0)}% of the lap`]);
+      }
+      if (r.ghostTime || r.karts.some((q) => q.ghost)) lines.push(['Staff ghost', r.ghostTime ? 'home in ' + fmtTime(r.ghostTime) : 'racing']);
       lines.push(['Road', k.loc ? `${k.loc.path.id} s=${k.loc.s.toFixed(0)} d=${k.loc.d.toFixed(1)}` : 'void']);
       lines.push(['Item / key', `${k.item || '—'}${k.itemN > 1 ? ' ×' + k.itemN : ''} / ${k.key ? 'yes' : 'no'}`]);
     }

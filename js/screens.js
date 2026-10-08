@@ -62,16 +62,18 @@ const Screens = {
     seg('optCC', [['50cc', 50], ['100cc', 100], ['150cc', 150], ['200cc', 200]], 'cc');
     seg('optBots', [['On', true], ['Off', false]], 'bots');
     seg('optItems', [['On', true], ['Off', false]], 'items');
+    // compact course cards: map, name, difficulty and kind of race, secret route, staff time
     const tp = $('trackPick');
     for (const t of TRACK_DEFS) {
       const b = el('button', 'track-b');
       b.type = 'button';
       b.dataset.track = t.id;
-      b.appendChild(trackThumb(t.id, 112, 64));
-      const lab = el('span', 'tn', t.name);
-      b.appendChild(lab);
-      const found = el('span', 'tf');
-      b.appendChild(found);
+      b.appendChild(trackThumb(t.id, 96, 58));
+      b.appendChild(el('span', 'tn', t.name));
+      const kind = el('span', 'tk');
+      kind.append(difficultyPips(t.difficulty), el('span', 'tkl'));
+      b.appendChild(kind);
+      b.appendChild(el('span', 'tf'));
       b.addEventListener('click', () => App.leaderAction('track', t.id));
       tp.appendChild(b);
     }
@@ -102,10 +104,21 @@ const Screens = {
     }
     // settings
     for (const b of $('trackPick').children) {
-      b.classList.toggle('on', b.dataset.track === s.track);
-      b.setAttribute('aria-pressed', String(b.dataset.track === s.track));
-      const routes = Save.data.routes[b.dataset.track];
-      b.querySelector('.tf').textContent = routes && Object.keys(routes).length ? '🔑 secret found' : '🔒 secret route';
+      const t = TRACK_DEFS.find((d) => d.id === b.dataset.track);
+      b.classList.toggle('on', t.id === s.track);
+      b.setAttribute('aria-pressed', String(t.id === s.track));
+      const secs = courseSections(t);
+      const laps = `${s.laps} lap${s.laps > 1 ? 's' : ''}`;
+      b.querySelector('.tkl').textContent = secs ? 'Point-to-point' : laps;
+      // sections · secret route · staff time (only the secret-route label gives way if it's tight)
+      const routes = Save.data.routes[t.id];
+      const staff = t.staff && t.staff[s.cc];
+      const tf = b.querySelector('.tf');
+      tf.textContent = '';
+      if (secs) tf.appendChild(el('span', '', `${secs} sections`));
+      tf.appendChild(el('span', 'sr', routes && Object.keys(routes).length ? '🔑 secret found' : '🔒 secret route'));
+      if (staff > 0) tf.appendChild(el('span', '', '⏱ ' + fmtTime(staff)));
+      b.title = `${t.name}: ${secs ? `point-to-point, ${secs} sections` : laps}, difficulty ${t.difficulty || 1} of 4` + (staff > 0 ? `, staff time ${fmtTime(staff)} at ${s.cc}cc` : '');
     }
     const mark = (id, v) => {
       for (const b of $(id).children) {
@@ -118,6 +131,12 @@ const Screens = {
     mark('optCC', s.cc);
     mark('optBots', s.bots);
     mark('optItems', s.items);
+    // a point-to-point run is one trip down the mountain: no laps to choose
+    const course = TRACK_DEFS.find((t) => t.id === s.track);
+    const p2p = !!(course && course.p2p);
+    for (const b of $('optLaps').children) b.disabled = p2p;
+    $('lapsNote').hidden = !p2p;
+    if (p2p) $('lapsNote').textContent = `${course.name} is one run in ${courseSections(course)} sections`;
     // slots
     const wrap = $('slots');
     wrap.innerHTML = '';
@@ -164,7 +183,8 @@ const Screens = {
     const start = $('startRace');
     start.disabled = n === 0;
     const waiting = Party.list().filter((p) => p.kind === 'phone' && p.connected && !p.ready).length;
-    $('startHint').textContent = n === 0 ? 'Add a racer to start' : waiting ? `Waiting for ${waiting} phone${waiting > 1 ? 's' : ''} to tap Ready (or start anyway)` : `${n} racer${n > 1 ? 's' : ''}${s.bots ? ' + bots' : ''} on ${TRACK_DEFS.find((t) => t.id === s.track).name}`;
+    const field = s.bots ? ' + bots' : App.staffGhostOn() ? ' vs the Staff Ghost' : '';
+    $('startHint').textContent = n === 0 ? 'Add a racer to start' : waiting ? `Waiting for ${waiting} phone${waiting > 1 ? 's' : ''} to tap Ready (or start anyway)` : `${n} racer${n > 1 ? 's' : ''}${field} on ${course.name}`;
     $('addTouch').hidden = !matchMedia('(pointer: coarse)').matches || Party.list().some((p) => p.src === 'touch');
   },
 
@@ -289,11 +309,14 @@ const Screens = {
   },
 
   // ---------- results ----------
-  renderResults(rows, news) {
+  // secs: the number of sections of a point-to-point run (0 on a circuit), which swaps the best
+  // lap for the time taken over each section.
+  renderResults(rows, news, secs = 0) {
     const t = $('resultsTable');
     t.innerHTML = '';
+    t.classList.toggle('p2p', secs > 0);
     const head = el('tr');
-    for (const h of ['', 'Racer', 'Time', 'Best lap', 'Coins']) head.appendChild(el('th', '', h));
+    for (const h of ['', 'Racer', 'Time', secs ? 'Sections' : 'Best lap', 'Coins']) head.appendChild(el('th', '', h));
     t.appendChild(head);
     for (const r of rows) {
       const tr = el('tr', r.slot >= 0 ? 'human' : '');
@@ -304,7 +327,8 @@ const Screens = {
       who.appendChild(el('span', '', r.slot >= 0 ? `P${r.slot + 1} ${r.name}` : r.name));
       tr.appendChild(who);
       tr.appendChild(el('td', '', (r.finished ? '' : '~') + fmtTime(r.time)));
-      tr.appendChild(el('td', '', r.bestLap ? fmtTime(r.bestLap) : '—'));
+      if (secs) tr.appendChild(el('td', 'splits', sectionTimes(r, secs).map(fmtSplit).join(' · ')));
+      else tr.appendChild(el('td', '', r.bestLap ? fmtTime(r.bestLap) : '—'));
       tr.appendChild(el('td', '', r.slot >= 0 ? `+${r.earned}` : String(r.coins)));
       t.appendChild(tr);
     }
@@ -314,6 +338,39 @@ const Screens = {
     $('resultsTitle').textContent = rows.some((r) => r.slot >= 0 && r.place === 1) ? 'Victory!' : 'Results';
   },
 };
+
+// Number of sections of a point-to-point course (0 for a circuit).
+function courseSections(def) {
+  return def && def.p2p ? (def.sections || []).length || 1 : 0;
+}
+
+// Four pips for a course's difficulty (1 easiest .. 4 hardest), coloured by how hard it is.
+function difficultyPips(n) {
+  n = U.clamp(n || 1, 1, 4);
+  const wrap = el('i', 'pips d' + n);
+  wrap.setAttribute('aria-label', `Difficulty ${n} of 4`);
+  for (let i = 0; i < 4; i++) wrap.appendChild(el('b', i < n ? 'on' : ''));
+  return wrap;
+}
+
+// Time spent on each section of a point-to-point run, from a results row: the splits are the
+// race times at the start of sections 2..n. null where the racer never got that far.
+function sectionTimes(r, n) {
+  const marks = [0].concat(r.splits || []);
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const end = i + 1 < marks.length ? marks[i + 1] : i + 1 === marks.length && r.finished ? r.time : null;
+    out.push(marks[i] !== undefined && end !== null ? end - marks[i] : null);
+  }
+  return out;
+}
+// Short times for the results table: 27.4, or 1:02.3 from a minute up.
+function fmtSplit(t) {
+  if (t === null || !isFinite(t) || t <= 0) return '—';
+  if (t < 60) return t.toFixed(1);
+  const m = Math.floor(t / 60), s = t - m * 60;
+  return `${m}:${s < 10 ? '0' : ''}${s.toFixed(1)}`;
+}
 
 // Mini course map for the track picker.
 function trackThumb(id, w, h) {
@@ -339,10 +396,19 @@ function trackThumb(id, w, h) {
       }
     }
     g.setLineDash([]);
-    g.fillStyle = '#ff6f91';
-    g.beginPath();
-    g.arc(w / 2 + (T.main.x[0] - mx) * sc, h / 2 + (T.main.z[0] - mz) * sc, 3, 0, TAU);
-    g.fill();
+    // the start line (pink), and on a point-to-point run the finish too (chequered)
+    const dot = (s, fill, r) => {
+      const i = T.main.indexAt(s);
+      g.fillStyle = fill;
+      g.beginPath();
+      g.arc(w / 2 + (T.main.x[i] - mx) * sc, h / 2 + (T.main.z[i] - mz) * sc, r, 0, TAU);
+      g.fill();
+    };
+    if (T.p2p) {
+      dot(T.finishS, '#2b1838', 4);
+      dot(T.finishS, '#fff6ea', 2.6);
+    }
+    dot(T.startS || 0, '#ff6f91', 3);
   });
 }
 

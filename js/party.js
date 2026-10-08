@@ -257,9 +257,21 @@ const Party = {
       this.link.send(p.pid, {
         t: 'state', phase: App.phase(), racing: p.kartIdx !== undefined, slot: p.slot, color: SLOT_COLORS[p.slot], name: p.name, leader: lead === p, ready: p.ready,
         config: p.config, owned: Save.data.owned, bank: Save.data.bank, settings: this.settings, players, code: this.code,
-        tracks: TRACK_DEFS.map((t) => ({ id: t.id, name: t.name, found: !!(Save.data.routes[t.id] && Object.keys(Save.data.routes[t.id]).length) })),
+        tracks: this.courseList(),
       });
     }
+  },
+  // The courses for the leader's picker: difficulty, laps or sections, secret route found,
+  // and the staff time for the chosen engine class (if the course has one).
+  courseList() {
+    return TRACK_DEFS.map((t) => {
+      const routes = Save.data.routes[t.id];
+      const staff = t.staff && t.staff[this.settings.cc];
+      return {
+        id: t.id, name: t.name, found: !!(routes && Object.keys(routes).length), difficulty: t.difficulty || 1,
+        sections: t.p2p ? (t.sections || []).length || 1 : 0, staff: staff > 0 ? fmtTime(staff) : '',
+      };
+    });
   },
   // Live race info for each phone's little screen (a few times a second).
   sendRaceHud(race, dt) {
@@ -267,11 +279,14 @@ const Party = {
     this.hudT -= dt;
     if (this.hudT > 0) return;
     this.hudT = 0.15;
+    // a point-to-point run counts sections instead of laps
+    const secs = race.p2p && race.sections ? race.sections.length : 0;
     for (const p of this.list()) {
       if (p.kind !== 'phone' || !p.connected || p.kartIdx === undefined) continue;
       const k = race.karts[p.kartIdx];
       this.link.send(p.pid, {
-        t: 'hud', place: k.place, n: race.karts.length, lap: Math.max(1, Math.min(race.laps, k.lap)), laps: race.laps,
+        t: 'hud', place: k.place, n: race.order ? race.order.length : race.karts.length, lap: Math.max(1, Math.min(race.laps, k.lap)), laps: race.laps,
+        secs, sec: secs ? U.clamp(k.section || 1, 1, secs) : 0,
         item: k.roulette > 0 ? '?' : k.item, itemN: k.itemN, coins: k.coins, key: k.key, finished: k.finished,
         state: race.state, count: race.state === 'countdown' ? Math.ceil(race.count) : 0, wrong: k.wrongT > 1.2, drift: k.driftLevel, boost: k.boostT > 0,
       });
@@ -282,8 +297,20 @@ const Party = {
     if (!this.link || !e.kart || e.kart.slot < 0) return;
     const p = this.players[e.kart.slot];
     if (!p || p.kind !== 'phone' || !p.connected) return;
-    const buzz = { hit: [80, 40, 120], squish: [200], fall: [60, 60, 60], boost: [25], itemget: [15], coin: [8], lap: [40, 30, 40], finallap: [60, 40, 60, 40, 60], finish: [100, 50, 200], key: [30, 30, 30], gate: [50, 30, 90], wall: [20], bump: [15], sparks: [10], go: [60] }[e.type];
-    if (buzz && !(e.type === 'boost' && e.a === 'pad')) this.link.send(p.pid, { t: 'fx', k: e.type, v: buzz });
+    const buzz = {
+      hit: [80, 40, 120], squish: [200], fall: [60, 60, 60], boost: [25], itemget: [15], coin: [8], lap: [40, 30, 40], finallap: [60, 40, 60, 40, 60],
+      finish: [100, 50, 200], key: [30, 30, 30], gate: [50, 30, 90], wall: [20], bump: [15], sparks: [10], go: [60],
+      ring: [20, 30, 45], glide: [30, 40, 90], spinboost: [15, 20, 25], bumper: [35], section: [40, 40, 40, 40, 120], finalsection: [60, 40, 60, 40, 60, 40, 160],
+    }[e.type];
+    // pads buzz every frame you sit on them; rings and spins have their own patterns
+    if (!buzz || (e.type === 'boost' && (e.a === 'pad' || e.a === 'ring' || e.a === 'spin'))) return;
+    const msg = { t: 'fx', k: e.type, v: buzz };
+    if (e.type === 'section' || e.type === 'finalsection') {
+      const sec = App.race && App.race.sections ? App.race.sections[e.a - 1] : null;
+      msg.n = e.a;
+      msg.name = sec ? sec.name : '';
+    }
+    this.link.send(p.pid, msg);
   },
   broadcast(msg) {
     if (this.link) this.link.broadcast(msg);

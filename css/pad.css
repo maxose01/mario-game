@@ -260,11 +260,49 @@ input {
   text-align: left;
   border-radius: 14px;
 }
+.lead .tracks .tt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
 .lead .tracks small {
   display: block;
   font-size: 12px;
+  line-height: 1.3;
   color: var(--ink-soft);
   margin-top: 3px;
+}
+/* course difficulty: four clay pips */
+.pips {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
+}
+.pips b {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: rgba(59, 36, 64, 0.14);
+  box-shadow: 0 0 0 1.5px rgba(59, 36, 64, 0.4), inset 0 -2px 0 rgba(59, 36, 64, 0.2);
+}
+.pips.d1 b.on {
+  background: #58c056;
+}
+.pips.d2 b.on {
+  background: #f0b129;
+}
+.pips.d3 b.on {
+  background: #f4822f;
+}
+.pips.d4 b.on {
+  background: #f2557d;
+}
+.note {
+  margin: -4px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-soft);
 }
 .opt {
   display: flex;
@@ -519,6 +557,10 @@ input {
   font: 700 64px/1 var(--font-display);
   color: var(--pink);
   text-shadow: 0 3px 0 #9a3a5c;
+}
+.result .note {
+  margin: 0;
+  color: #8a4fd0;
 }
 .result ol {
   text-align: left;
