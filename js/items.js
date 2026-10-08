@@ -761,7 +761,12 @@ class ItemSystem {
         const dx = k.x - h.x, dz = k.z - h.z;
         const along = dx * ca + dz * sa;
         const perp = -dx * sa + dz * ca;
-        if (along > -0.6 && along < h.len + 0.6 && Math.abs(perp) < 1.5 && Math.abs(k.y - h.y) < 2.5) k.spinOut(CFG.spinOutTime, 'fire');
+        // after a burn the kart gets a moment to drive clear (near the pivot the bar would
+        // otherwise catch it again on every turn)
+        if (k.fireSafeT > this.race.time) continue;
+        if (along > -0.6 && along < h.len + 0.6 && Math.abs(perp) < 1.5 && Math.abs(k.y - h.y) < 2.5) {
+          if (k.spinOut(CFG.spinOutTime, 'fire')) k.fireSafeT = this.race.time + CFG.spinOutTime + 1.2;
+        }
         continue;
       }
       if (h.kind === 'podoboo') {

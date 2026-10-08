@@ -355,9 +355,14 @@ class BotBrain {
     const sp = Math.max(8, k.vf);
     const pose = this._pose || (this._pose = {});
     for (const h of items.hazards) {
-      if (!h.alive || h.kind === 'firebar') continue;
+      if (!h.alive) continue;
       const dd = (h.x - k.x) ** 2 + (h.z - k.z) ** 2;
       if (dd > 56 * 56) continue; // far out of reach of the 26-unit look-ahead
+      if (h.kind === 'firebar') {
+        // keep off the pivot block, where the bar sweeps past most often
+        consider(h.x, h.z, 1.4);
+        continue;
+      }
       switch (h.kind) {
         case 'walker':
         case 'stomper':

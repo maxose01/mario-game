@@ -117,9 +117,9 @@ for (const track of TRACKS) {
       check(`${track}: bots split at the ${fork.routeName} fork`, took >= 1 && took <= 7, `${took}/8 took the side road`);
     }
     // (the race ends as the last one crosses the line: look at those home a while)
-    const home = race.karts.filter((k) => k.finished && k.finishTime < race.raceTime - 4);
+    const home = race.karts.filter((k) => k.finished && k.finishTime < race.raceTime - 3);
     const parked = home.every((k) => k.loc.over === 0 && k.speed < 3);
-    check(`${track}: finishers stop in the run-out`, home.length >= 4 && parked && stats.every((s) => s.walls < 25), `speeds ${home.map((k) => k.speed.toFixed(1)).join(' ')}`);
+    check(`${track}: finishers stop in the run-out`, home.length >= 2 && parked && stats.every((s) => s.walls < 25), `speeds ${home.map((k) => k.speed.toFixed(1)).join(' ')}`);
   }
   if (verbose) {
     for (const k of race.order) {

@@ -521,10 +521,11 @@ class World3D {
     this.terrain = fine;
     if (outer) this.terrainField(outer, R);
     this.terrainOuter = outer;
-    // lakes and ponds sit in bowls
+    // lakes and ponds sit in bowls; a gorge {seg, t, d, r, y | depth} is a dry hollow with a flat
+    // floor at height y (or depth below the ground), e.g. the drop below a dam
     this.lakes = [];
     for (const lm of this.def.landmarks || []) {
-      if (lm.kind !== 'lake' && lm.kind !== 'pond') continue;
+      if (lm.kind !== 'lake' && lm.kind !== 'pond' && lm.kind !== 'gorge') continue;
       let w;
       try {
         w = T.where(lm);
@@ -533,8 +534,10 @@ class World3D {
       }
       const pt = w.path.point(w.s, lm.d || 0);
       const r = lm.r || 14;
-      const y = (this.heightAt(pt.x, pt.z) ?? pt.y) + (lm.y || 0);
-      this.lakes.push({ lm, x: pt.x, z: pt.z, r, y });
+      const gorge = lm.kind === 'gorge';
+      const ground = this.heightAt(pt.x, pt.z) ?? pt.y;
+      const y = gorge ? (lm.y !== undefined ? lm.y : ground - (lm.depth || 10)) + 2 : ground + (lm.y || 0);
+      if (!gorge) this.lakes.push({ lm, x: pt.x, z: pt.z, r, y });
       const { x0, z0, cell, nx, nz, H, K } = fine;
       const reach = r * 1.25;
       for (let j = Math.max(0, Math.floor((pt.z - reach - z0) / cell)); j <= Math.min(nz - 1, Math.ceil((pt.z + reach - z0) / cell)); j++) {
