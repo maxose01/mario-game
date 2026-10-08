@@ -28,7 +28,7 @@ class RaceView {
     this.opts = opts;
     this.world = new World3D(race.track);
     this.fx = new RaceFX(this.world, race);
-    this.views = humans.map((h) => this.makeCam(h.idx, h.slot));
+    this.views = humans.map((h) => Object.assign(this.makeCam(h.idx, h.slot), { touch: !!h.touch }));
     if (!this.views.length || opts.spectator) this.spectator = this.makeCam(0, -1);
     else if (this.views.length === 3) this.spectator = this.makeCam(0, -1);
     this.banners = new Map(); // per view index
@@ -308,7 +308,8 @@ class RaceView {
     // position
     const pl = k.place;
     ctx.save();
-    ctx.translate(right ? 92 : w - 92, top ? 70 : h - 64);
+    // touch racers have their buttons in the bottom-right corner: put the position beside them
+    ctx.translate(right ? 92 : v.touch ? w - 300 : w - 92, top ? 70 : h - 64);
     const pop = k._placeT !== undefined && this.time - k._placeT < 0.3 ? 1 + (0.3 - (this.time - k._placeT)) : 1;
     ctx.scale(pop, pop);
     Clay.text(ctx, String(pl), -14, 0, 74, PLACE_COLS[pl - 1] || '#ffffff');

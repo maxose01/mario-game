@@ -257,7 +257,7 @@ const App = {
       racers.push({ name: findPart('character', cfg.character).name, config: cfg, bot: true });
     }
     this.race = new Race({ track: s.track, laps: s.laps, cc: s.cc, racers, items: s.items, intro: 2.6 });
-    this.view = new RaceView(this.race, humans.map((p) => ({ slot: p.slot, idx: p.kartIdx })));
+    this.view = new RaceView(this.race, humans.map((p) => ({ slot: p.slot, idx: p.kartIdx, touch: p.src === 'touch' })));
     this.raceDoneT = 0;
     this.paused = false;
     this.screen = 'race';
