@@ -77,6 +77,12 @@ class HostLink {
   startLocal(info) {
     this.mode = 'local';
     this.info = info;
+    // a big screen that reloads asks for its old room back, so phones stay connected
+    try {
+      this.code = sessionStorage.getItem('claykart.room') || null;
+    } catch (e) {
+      this.code = null;
+    }
     const open = () => {
       const ws = (this.ws = new WebSocket(Net.wsUrl()));
       ws.onopen = () => ws.send(JSON.stringify({ t: 'host', room: this.code }));
@@ -89,6 +95,11 @@ class HostLink {
         }
         if (m.t === 'room') {
           this.code = m.code;
+          try {
+            sessionStorage.setItem('claykart.room', m.code);
+          } catch (e) {
+            /* storage unavailable */
+          }
           this.info = Object.assign({}, this.info, { ips: m.ips, port: m.port });
           this.h.onRoom(m.code, this.joinUrl());
           this.h.onStatus('Phones on your Wi-Fi can join', true);

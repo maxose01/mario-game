@@ -255,7 +255,7 @@ const Party = {
     for (const p of this.list()) {
       if (p.kind !== 'phone' || !p.connected) continue;
       this.link.send(p.pid, {
-        t: 'state', phase: App.phase(), slot: p.slot, color: SLOT_COLORS[p.slot], name: p.name, leader: lead === p, ready: p.ready,
+        t: 'state', phase: App.phase(), racing: p.kartIdx !== undefined, slot: p.slot, color: SLOT_COLORS[p.slot], name: p.name, leader: lead === p, ready: p.ready,
         config: p.config, owned: Save.data.owned, bank: Save.data.bank, settings: this.settings, players, code: this.code,
         tracks: TRACK_DEFS.map((t) => ({ id: t.id, name: t.name, found: !!(Save.data.routes[t.id] && Object.keys(Save.data.routes[t.id]).length) })),
       });

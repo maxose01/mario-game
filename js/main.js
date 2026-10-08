@@ -49,6 +49,12 @@ const App = {
     window.addEventListener('resize', () => this.resize());
     if (document.fonts && document.fonts.load) document.fonts.load(`700 20px ${FONT}`).catch(() => {});
     this.go('title');
+    // reloaded mid-party? reopen the same room straight away so the phones reconnect
+    try {
+      if (sessionStorage.getItem('claykart.room')) Party.open();
+    } catch (e) {
+      /* storage unavailable */
+    }
     let last = performance.now(), acc = 0, frames = 0, fpsT = last, slowT = 0, fastT = 0;
     const loop = (now) => {
       requestAnimationFrame(loop);

@@ -88,6 +88,7 @@ function join() {
   if (P.link) P.link.close();
   P.link = new PadLink(code, { id: P.id, name: P.name, config: P.config }, {
     onOpen: () => {
+      P.retries = 0;
       overlay(null);
       $('joinErr').textContent = '';
       if (P.phase === 'join') show('lobby');
@@ -95,6 +96,12 @@ function join() {
     },
     onMessage: (m) => onMessage(m),
     onClose: (reason) => {
+      // dropped mid-party: quietly try to get back in (the big screen keeps our seat)
+      if (reason === 'lost' && P.phase !== 'join' && (P.retries = (P.retries || 0) + 1) <= 20) {
+        overlay('Reconnecting to the big screen…');
+        setTimeout(join, 1500);
+        return;
+      }
       const msg = {
         'no-room': 'No game with that room code. Check the code on the big screen.',
         full: 'This race is full (four racers).',
@@ -108,7 +115,10 @@ function join() {
         $('joinErr').textContent = msg;
       } else overlay(msg, true);
     },
-    onHost: (present) => overlay(present ? null : 'The big screen went away. Waiting for it to come back…'),
+    onHost: (present) => {
+      if (present) P.resync = true;
+      overlay(present ? null : 'The big screen went away. Waiting for it to come back…');
+    },
   }, online);
   P.link.connect();
 }
@@ -122,7 +132,12 @@ function onMessage(m) {
     case 'welcome':
       P.slot = m.slot;
       P.name = m.name;
-      P.config = sanitizeKart(m.config);
+      if (P.resync) {
+        // the big screen reloaded: it only knows our first hello, so remind it
+        P.resync = false;
+        send({ t: 'cfg', config: P.config });
+        if (P.ready) send({ t: 'ready', v: true });
+      } else P.config = sanitizeKart(m.config);
       document.documentElement.style.setProperty('--slot', m.color);
       renderLobby();
       break;
@@ -139,12 +154,15 @@ function onMessage(m) {
       P.players = m.players || [];
       document.documentElement.style.setProperty('--slot', m.color);
       Store.set('claykart.pad.profile', { name: P.name, config: P.config, room: m.code || $('code').value });
-      if (m.phase === 'race') show('race');
-      else if (m.phase === 'results') show('results');
+      // joined while a race is already running? wait in the garage for the next one
+      if (m.phase === 'race' && m.racing !== false) show('race');
+      else if (m.phase === 'results' && P.haveResults) show('results');
       else show('lobby');
       renderLobby();
+      if (m.phase === 'race' && m.racing === false) $('meStatus').textContent = 'A race is on: you join the next one!';
       break;
     case 'go':
+      P.haveResults = false;
       show('race');
       goFullscreen();
       break;
@@ -521,6 +539,7 @@ function buildResults() {
   for (const b of document.querySelectorAll('[data-lead]')) b.addEventListener('click', () => send({ t: 'lead', act: b.dataset.lead }));
 }
 function renderResults(m) {
+  P.haveResults = true;
   $('rPlace').textContent = m.place ? ordinal(m.place) : 'Finished';
   $('rEarned').textContent = `+${m.earned} coins · bank ${m.bank}`;
   P.bank = m.bank;

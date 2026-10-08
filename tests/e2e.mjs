@@ -115,6 +115,15 @@ try {
   check('first phone is the race leader', await phones[0].isVisible('#leadCard'));
   check('second phone is not the leader', !(await phones[1].isVisible('#leadCard')));
 
+  // ---- the big screen reloads: same room, phones come straight back ----
+  await host.reload();
+  await host.waitForFunction(() => typeof App !== 'undefined' && Party.code, null, { timeout: 30000 });
+  check('a reloaded big screen reopens the same room', (await host.evaluate(() => Party.code)) === code);
+  await host.waitForFunction(() => Party.list().length === 2, null, { timeout: 10000 }).catch(() => {});
+  check('phones rejoin a reloaded big screen', (await host.evaluate(() => Party.list().map((p) => p.name).join())) === 'Ana,Bo');
+  await host.click('text=Party Race');
+  await host.waitForFunction(() => App.screen === 'lobby', null, { timeout: 5000 });
+
   // ---- garage on the phone ----
   const [ana, bo] = phones;
   await bo.click('#tabs button[data-kind="character"]');
