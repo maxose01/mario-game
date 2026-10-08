@@ -582,7 +582,7 @@ const App = {
     const v = new THREE.Vector3();
     sr.slots.forEach((s, i) => {
       const p = Party.players[i];
-      v.set(s.root.position.x, 3.6, s.root.position.z).project(cam);
+      v.set(s.root.position.x, 3.1, s.root.position.z).project(cam);
       const x = (v.x * 0.5 + 0.5) * VIEW_W, y = (-v.y * 0.5 + 0.5) * VIEW_H;
       if (!p) {
         Clay.label(ctx, `P${i + 1}`, x, y + 30, 16, 'rgba(255,248,236,0.55)', 'center');

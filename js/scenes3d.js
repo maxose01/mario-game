@@ -72,8 +72,10 @@ class Showroom {
       const root = new THREE.Group();
       let x = 0, y = 0, z = 0, s = 1;
       if (mode === 'row') {
-        x = (i - (n - 1) / 2) * 4.6 - 1.2;
+        // four small turntables in the open band between the lobby's two cards
+        x = (i - (n - 1) / 2) * 3.6;
         z = 0;
+        s = 0.8;
       } else if (mode === 'podium') {
         const spots = [[0, 2.4, 0], [-5.2, 1.5, 0.6], [5.2, 0.8, 0.6]];
         if (i < 3) [x, y, z] = spots[i];
@@ -88,7 +90,10 @@ class Showroom {
         base = GK.merge([
           GK.at(GK.box(4.6, y + 0.2, 4.2, ['#ffd84a', '#dfe6f2', '#f0a35e'][i], { seed: 40 + i, r: 0.3 }), 0, (y + 0.2) / 2 - 0.2, 0),
         ]);
-      } else base = GK.at(GK.cyl(2.5, 2.7, 0.4, it && it.color ? it.color : '#8a6a9a', { segs: 28, seed: 30 + i }), 0, 0, 0);
+      } else {
+        const r = mode === 'row' ? 1.65 : 2.5;
+        base = GK.at(GK.cyl(r, r + 0.15, 0.4, it && it.color ? it.color : '#8a6a9a', { segs: 28, seed: 30 + i }), 0, 0, 0);
+      }
       const bm = new THREE.Mesh(base, this.mat);
       root.add(bm);
       root.position.set(x, 0, z);
@@ -99,8 +104,8 @@ class Showroom {
         kart.group.scale.setScalar(s);
         root.add(kart.group);
       } else {
-        const q = new THREE.Mesh(GK.blob(0.9, 1.1, 0.9, '#8a6a9a', { seed: 77 + i }), this.mat);
-        q.position.y = 1.6;
+        const q = new THREE.Mesh(GK.blob(0.7, 0.9, 0.7, '#8a6a9a', { seed: 77 + i }), this.mat);
+        q.position.y = 1.2;
         root.add(q);
       }
       this.scene.add(root);
@@ -121,8 +126,8 @@ class Showroom {
       c.lookAt(4.0, 2.0, 0);
     } else {
       // the karts sit in the gap between the join card and the race settings
-      c.position.set(-1.2, 7.5, 20);
-      c.lookAt(-1.2, -0.6, 0);
+      c.position.set(0, 7, 19.5);
+      c.lookAt(0, -0.4, 0);
     }
   }
 

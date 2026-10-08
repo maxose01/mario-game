@@ -237,8 +237,14 @@ class Track {
     this.def = def;
     this.id = def.id;
     const loop = buildMainLoop(def);
-    this.marks = loop.marks;
-    this.main = new TrackPath('main', loop.pts, true);
+    // The start line sits a little way down the first straight, so the grid behind it is on
+    // the straight too (not in the last corner). Rotate the loop to begin there.
+    const startAt = def.startAt !== undefined ? def.startAt : Math.min(44, loop.marks[0].len * 0.45);
+    let acc = 0, j = 0;
+    for (; j < loop.pts.length - 1 && acc < startAt; j++) acc += Math.hypot(loop.pts[j + 1].x - loop.pts[j].x, loop.pts[j + 1].z - loop.pts[j].z);
+    const pts = loop.pts.slice(j).concat(loop.pts.slice(0, j));
+    this.marks = loop.marks.map((m) => ({ s: m.s - acc, len: m.len }));
+    this.main = new TrackPath('main', pts, true);
     this.main.index = 0;
     this.paths = [this.main];
     this.byId = { main: this.main };
@@ -295,8 +301,9 @@ class Track {
       b = Object.assign({ from: [b.seg, 0], to: [b.seg, 1] }, b);
       b.pts = this.arcShortcut(b);
     }
-    const fromS = this.segS(b.from[0], b.from[1]);
-    const toS = this.segS(b.to[0], b.to[1]);
+    const L = main.length;
+    const fromS = (((this.segS(b.from[0], b.from[1])) % L) + L) % L;
+    const toS = (((this.segS(b.to[0], b.to[1])) % L) + L) % L;
     const span = (((toS - fromS) % main.length) + main.length) % main.length;
     const hw = b.hw || 6, sh = b.sh !== undefined ? b.sh : 2;
     // control points (u along the main span, d lateral, dy elevation offset)
@@ -521,11 +528,25 @@ class Track {
     // {kind, seg, t, t1 | len, d, w, h} on the main loop, or {kind, path, u, u1 | len, ...} on a branch
     for (const z of this.def.zones || []) {
       const w = this.where(z);
+      let s0 = w.s;
       let s1 = w.s + (z.len || 6);
       if (z.t1 !== undefined) s1 = this.segS(z.seg, z.t1);
       if (z.u1 !== undefined) s1 = z.u1 * w.path.length;
       const half = (z.w !== undefined ? z.w : 200) / 2;
-      w.path.zones.push({ kind: z.kind, path: w.path, s0: w.s, s1, d0: (z.d || 0) - half, d1: (z.d || 0) + half, h: z.h || 0 });
+      const add = (a, b) => w.path.zones.push({ kind: z.kind, path: w.path, s0: a, s1: b, d0: (z.d || 0) - half, d1: (z.d || 0) + half, h: z.h || 0 });
+      if (w.path.closed) {
+        // keep zones inside 0..L, splitting any that cross the start line
+        const L = w.path.length;
+        const shift = Math.floor(s0 / L) * L;
+        s0 -= shift;
+        s1 -= shift;
+        if (s1 > L) {
+          add(s0, L);
+          add(0, s1 - L);
+          continue;
+        }
+      }
+      add(s0, s1);
     }
   }
   zoneAt(loc, kind) {

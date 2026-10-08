@@ -1046,7 +1046,12 @@ function pointInPoly(x, z, poly) {
 // Landmark builders: called with this = World3D, (spec, x, groundY, z, roadHeading, parts).
 const LANDMARKS = {
   gantry(lm, x, y, z, head, parts) {
+    // always over the start line (index 0 of the loop)
     const p = this.track.main;
+    x = p.x[0];
+    y = p.y[0];
+    z = p.z[0];
+    head = p.head[0];
     const hw = p.hw[0] + p.sh[0] + 0.6;
     const nx = p.nx[0], nz = p.nz[0];
     for (const side of [-1, 1]) {
