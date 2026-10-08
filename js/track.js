@@ -329,6 +329,17 @@ class Track {
     const L = this.length;
     return this.main.closed ? (((b - a) % L) + L) % L : b - a;
   }
+  // Signed progress from main-road position a to b: the short way round on a circuit (so a
+  // step back across the start line is a small negative number), plain b - a on a run.
+  deltaS(a, b) {
+    let d = b - a;
+    if (this.main.closed) {
+      const L = this.length;
+      if (d > L / 2) d -= L;
+      if (d < -L / 2) d += L;
+    }
+    return d;
+  }
   // 1-based section index at a main-road s (0 on circuits).
   sectionAt(mainS) {
     let n = 0;
@@ -668,6 +679,26 @@ class Track {
       else if (z.kind === 'hump') y += z.h * Math.sin(Math.PI * u);
     }
     return y;
+  }
+  // Extra ground slope (rise per unit along the road) that ramps and moguls add under a located
+  // point, on top of the road's own slope. Used to pitch karts up a ramp.
+  zoneSlope(loc) {
+    if (!loc || !loc.path) return 0;
+    let m = 0;
+    const zs = loc.path.zones;
+    for (let k = 0; k < zs.length; k++) {
+      const z = zs[k];
+      if (loc.s < z.s0 || loc.s > z.s1 || loc.d < z.d0 || loc.d > z.d1) continue;
+      const len = z.s1 - z.s0 || 1;
+      if (z.kind === 'ramp' || z.kind === 'glide') m += z.h / len;
+      else if (z.kind === 'hump') m += ((z.h * Math.PI) / len) * Math.cos((Math.PI * (loc.s - z.s0)) / len);
+    }
+    return m;
+  }
+  // Does a chasm (gap zone) start within `within` units ahead of s on this path (or is s in one)?
+  gapAhead(path, s, within) {
+    for (const z of path.zones) if (z.kind === 'gap' && s <= z.s1 && s >= z.s0 - within) return z;
+    return null;
   }
   // What the tyres are on: road, offroad, boost, ice, mud, shallow, ramp (also moguls), glide,
   // or void. Zones that are not surfaces (current, antigrav, gap) are looked up separately.

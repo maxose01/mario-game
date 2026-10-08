@@ -11,7 +11,7 @@
 //   --d lateral offset, --speed initial speed, --gas (hold the gas), --wait ms per spot,
 //   --players 1..4 (split screen), --bots 0 to race alone, --w/--h viewport, --perf (draw calls
 //   and triangles per shot), --intro, --title, --lobby, --eval "js" (run in the page after the
-//   race starts), --out dir (default ./shots).
+//   race starts), --params '{"shadows":false}' (Edit Panel values), --out dir (default ./shots).
 import { createRequire } from 'module';
 import { spawn } from 'child_process';
 import fs from 'fs';
@@ -64,14 +64,15 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
 const errors = [];
 try {
   const ctx = await browser.newContext({ viewport: { width: W, height: H } });
-  await ctx.addInitScript(() => {
+  const params = Object.assign({ autoRes: false }, opt('params', false) ? JSON.parse(opt('params')) : {});
+  await ctx.addInitScript((params) => {
     try {
       localStorage.clear();
-      localStorage.setItem('claykart.params.v1', JSON.stringify({ autoRes: false }));
+      localStorage.setItem('claykart.params.v1', JSON.stringify(params));
     } catch (e) {
       /* storage blocked */
     }
-  });
+  }, params);
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => {
@@ -81,7 +82,27 @@ try {
   await page.waitForFunction(() => typeof App !== 'undefined' && App.screen === 'title', null, { timeout: 20000 });
   const snap = async (name) => {
     const file = path.join(out, name + '.png');
-    await page.screenshot({ path: file });
+    // freeze the game loop after two more frames, so SwiftShader isn't busy drawing while we capture
+    await page.evaluate(
+      () =>
+        new Promise((done) => {
+          const tick = App.tick, draw = App.draw;
+          let n = 0;
+          App.draw = (dt) => {
+            draw.call(App, dt);
+            if (++n < 2) return;
+            App.tick = (dt2, acc) => acc;
+            App.draw = () => {};
+            window.__thaw = () => {
+              App.tick = tick;
+              App.draw = draw;
+            };
+            done();
+          };
+        }),
+    );
+    await page.screenshot({ path: file, timeout: 180000 });
+    await page.evaluate(() => window.__thaw());
     let perf = '';
     if (opt('perf', false)) {
       const info = await page.evaluate(() => {

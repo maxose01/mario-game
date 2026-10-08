@@ -1,7 +1,9 @@
 'use strict';
-// Bot drivers (pure simulation). Each bot picks a road (the main loop, or a hidden route when
-// it carries a key), aims at a point ahead on its own lane, takes the inside of corners,
-// hop-drifts long bends for mini-turbos, dodges hazards and uses items with a little cunning.
+// Bot drivers (pure simulation). Each bot picks a road (the main road, a side road at a fork,
+// or a hidden route when it carries a key), aims at a point ahead on its own lane, takes the
+// inside of corners, hop-drifts long bends for mini-turbos, dodges hazards (leading the moving
+// ones), flies its glider down the middle and through boost rings, and uses items with a little
+// cunning. After the finish of a point-to-point run it rolls to a stop in the run-out.
 
 class BotBrain {
   constructor(kart, rnd) {
@@ -15,6 +17,7 @@ class BotBrain {
     this.dodge = 0;
     this.dodgeT = 0;
     this.route = null; // branch path being followed
+    this.forks = {}; // open branch id -> {lap, take}: the route picked at each fork
     this.target = { x: 0, z: 0 };
     this.stuckT = 0;
     this.reverseT = 0;
@@ -34,6 +37,10 @@ class BotBrain {
     if (!k.loc) {
       c.gas = true;
       c.steer = 0;
+      return;
+    }
+    if (race.p2p && (k.finished || k.totalS >= race.goal)) {
+      this.runOut();
       return;
     }
     this.laneT -= dt;
@@ -58,6 +65,10 @@ class BotBrain {
       d = q.d;
       hw = q.hw;
     }
+    if (k.gliding) {
+      this.glide(path, s);
+      return;
+    }
     const sp = Math.max(0, k.vf);
     const look = 7 + sp * 0.42;
     // curvature ahead decides lane (inside line) and drifting
@@ -74,8 +85,8 @@ class BotBrain {
     lane = U.clamp(lane + this.dodge, -0.85, 0.85);
     const tp = path.point(Math.min(path.closed ? s + look : path.length, s + look), lane * hw);
     let tx = tp.x, tz = tp.z;
-    if (!path.closed && s + look > path.length) {
-      // running off the end of a branch: aim down the main loop after it
+    if (path.branch && s + look > path.length) {
+      // running off the end of a branch: aim down the main road after it
       const ms = T.mainS(path, path.length) + (s + look - path.length);
       const mp = T.main.point(ms, lane * T.main.hw[T.main.indexAt(ms)]);
       tx = mp.x;
@@ -119,6 +130,68 @@ class BotBrain {
     // ease off for very sharp turns at speed
     if (!k.drift && Math.abs(err) > 0.9 && sp > 12) c.gas = false;
     this.thinkItems(dt, path, s);
+  }
+
+  // Gliding: fly down the middle of the road far ahead, or straight through the next boost
+  // ring (aiming a little past its centre so the glider crosses it square on).
+  glide(path, s) {
+    const k = this.k, c = k.ctl;
+    const sp = Math.max(0, k.vf);
+    const ring = this.ringAhead(path, s);
+    let tx, tz;
+    if (ring) {
+      tx = ring.x + ring.tx * 10;
+      tz = ring.z + ring.tz * 10;
+    } else {
+      const tp = path.point(Math.min(path.closed ? s + 60 : path.length, s + 14 + sp * 0.8), 0);
+      tx = tp.x;
+      tz = tp.z;
+    }
+    this.target.x = tx;
+    this.target.z = tz;
+    let err = Math.atan2(tz - k.z, tx - k.x) - k.head;
+    while (err > Math.PI) err -= Math.PI * 2;
+    while (err < -Math.PI) err += Math.PI * 2;
+    c.steer = U.clamp(err * 3, -1, 1);
+    this.lastSteer = c.steer;
+    c.gas = true;
+    c.brake = false;
+    c.drift = false;
+    this.stuckT = 0;
+  }
+  // The nearest boost ring ahead on this path that is still worth steering for.
+  ringAhead(path, s) {
+    let best = null, bestA = Infinity;
+    for (const r of this.k.race.items.rings) {
+      if (r.path !== path) continue;
+      const a = path.closed ? (((r.s - s) % path.length) + path.length) % path.length : r.s - s;
+      if (a < 4 || a > 90 || a >= bestA) continue;
+      best = r;
+      bestA = a;
+    }
+    return best;
+  }
+
+  // Past the finish of a point-to-point run: ease off, then brake to a stop in a lane picked
+  // by finishing place, so the field parks side by side instead of piling into the barrier.
+  runOut() {
+    const k = this.k, c = k.ctl, T = k.track, race = k.race;
+    const path = T.main;
+    const q = k.path === path ? k.loc : nearestOnPath(T, path, k.x, k.z);
+    const place = Math.max(1, k.place);
+    const lane = (((place - 1) % 4) - 1.5) * 0.4;
+    const tp = path.point(Math.min(path.length, q.s + 12), lane * q.hw);
+    let err = Math.atan2(tp.z - k.z, tp.x - k.x) - k.head;
+    while (err > Math.PI) err -= Math.PI * 2;
+    while (err < -Math.PI) err += Math.PI * 2;
+    c.steer = U.clamp(err * 2.6, -1, 1);
+    const past = k.totalS - race.goal;
+    c.gas = false;
+    // the first four park further down the run-out than the rest
+    c.brake = k.vf > 1.5 && past > (place <= 4 ? 14 : 2);
+    c.drift = false;
+    c.item = false;
+    this.stuckT = 0;
   }
 
   // Pinned against a wall or a door? Back up for a moment with the wheel turned; if that
@@ -176,28 +249,45 @@ class BotBrain {
     return true;
   }
 
-  // Take a hidden route when carrying a key (or when its gate stands open).
+  // Which way at a fork? One roll per fork (per lap on a circuit): about half take each road.
+  forkTake(br) {
+    const f = this.forks[br.id];
+    if (f && f.lap === this.k.lap) return f.take;
+    const take = this.rnd() < 0.5;
+    this.forks[br.id] = { lap: this.k.lap, take };
+    return take;
+  }
+
+  // Take a side road at a fork if that is the pick, and a hidden route when carrying a key (or
+  // when its gate stands open).
   chooseRoute() {
     const k = this.k, T = k.track, items = k.race.items;
-    // already through a gate (slipped in behind someone, or rescued onto the route)? follow it
+    // already on a branch? follow it if we are through its gate (slipped in behind someone, or
+    // rescued onto it), or well into a side road (or meant to take it)
     if (!this.route && k.path && k.path.branch) {
-      const g = items.gates.find((q) => q.path === k.path);
-      if (!g || k.loc.i >= g.i) this.route = k.path;
+      const br = k.path;
+      if (br.open) {
+        if (k.loc.s > 14 || this.forkTake(br)) this.route = br;
+      } else {
+        const g = items.gates.find((q) => q.path === br);
+        if (!g || k.loc.i >= g.i) this.route = br;
+      }
     }
     if (this.route) {
       const br = this.route;
-      const gate = items.gates.find((g) => g.path === br);
-      const beforeGate = k.path !== br || (gate && k.loc.i < gate.i);
-      // no key and the door has shut in front of us: forget it
-      if (!k.key && beforeGate && (!gate || gate.openT <= 0.2)) {
-        this.route = null;
-        return;
+      if (!br.open) {
+        const gate = items.gates.find((g) => g.path === br);
+        const beforeGate = k.path !== br || (gate && k.loc.i < gate.i);
+        // no key and the door has shut in front of us: forget it
+        if (!k.key && beforeGate && (!gate || gate.openT <= 0.2)) {
+          this.route = null;
+          return;
+        }
       }
       if (k.path === br) return;
       const b = br.branch;
-      const ahead = (((b.fromS - k.loc.mainS) % T.length) + T.length) % T.length;
-      const rel = (((k.loc.mainS - b.fromS) % T.length) + T.length) % T.length;
-      if (ahead < 80 || rel < 25) return; // approaching, or in the mouth
+      const ahead = T.aheadS(k.loc.mainS, b.fromS), rel = T.aheadS(b.fromS, k.loc.mainS);
+      if ((ahead >= 0 && ahead < 80) || (rel >= 0 && rel < 25)) return; // approaching, or in the mouth
       this.route = null; // done with it (or missed the mouth)
       return;
     }
@@ -205,8 +295,15 @@ class BotBrain {
     this.wantKey = false;
     for (const br of T.branches) {
       const b = br.branch;
-      const ahead = (((b.fromS - k.loc.mainS) % T.length) + T.length) % T.length;
-      if (ahead > 70) continue;
+      const ahead = T.aheadS(k.loc.mainS, b.fromS);
+      if (ahead < 0 || ahead > 70) continue;
+      if (br.open) {
+        if (k.path === T.main && this.forkTake(br)) {
+          this.route = br;
+          return;
+        }
+        continue;
+      }
       const gate = items.gates.find((g) => g.path === br);
       const open = gate && gate.openT > 1.8 && ahead < 18;
       if ((k.key || open) && k.path === T.main) {
@@ -215,7 +312,7 @@ class BotBrain {
       }
     }
     // go key hunting now and then
-    if (!k.key && items.keys.length) {
+    if (!k.key && !k.ghost && items.keys.length) {
       if (this.keyLap !== k.lap) {
         this.keyLap = k.lap;
         this.huntRoll = this.rnd() < CFG.botKeyHunt;
@@ -225,7 +322,7 @@ class BotBrain {
         if (!key.active) continue;
         const kl = T.locate(key.x, key.z, key.y, T.main, {});
         if (!kl || kl.path !== T.main) continue;
-        const ahead = (((kl.mainS - k.loc.mainS) % T.length) + T.length) % T.length;
+        const ahead = T.aheadS(k.loc.mainS, kl.mainS);
         if (ahead < 45 && ahead > 2) {
           this.wantKey = true;
           this.keyTarget = { d: kl.d };
@@ -235,21 +332,80 @@ class BotBrain {
   }
 
   // Lateral nudge (fraction of half-width) to steer around trouble on the planned line.
+  // Wandering hazards are dodged where they will be when we get there.
   findDodge(path, s, d) {
     const k = this.k, items = k.race.items;
     let push = 0;
+    // something r wide at lateral qd, ahead units up the road: steer away from it
+    const nudge = (ahead, qd, r, gain = 0.16, keepSide = false) => {
+      if (ahead < 2 || ahead > 26) return;
+      const gap = qd - d;
+      if (Math.abs(gap) > r + 2.2) return;
+      // dead ahead: stick to the side we were already swerving to, don't dither
+      const away = keepSide && this.dodgeSide && Math.abs(gap) < 0.8 ? this.dodgeSide : gap > 0 ? -1 : 1;
+      push += away * (r + 2.4 - Math.abs(gap)) * gain * (1 - ahead / 30);
+    };
     const consider = (x, z, r) => {
       const q = nearestOnPath(k.track, path, x, z, k.path === path ? k.loc.i : -1);
       let ahead = q.s - s;
       if (path.closed) ahead = ((ahead % path.length) + path.length) % path.length;
-      if (ahead < 2 || ahead > 26) return;
-      const gap = q.d - d;
-      if (Math.abs(gap) > r + 2.2) return;
-      const away = gap > 0 ? -1 : 1;
-      push += away * (r + 2.4 - Math.abs(gap)) * 0.16 * (1 - ahead / 30);
+      nudge(ahead, q.d, r);
     };
     for (const o of items.objects) if (o.kind === 'banana' || (o.kind === 'shell' && o.owner !== k)) consider(o.x, o.z, 1.2);
-    for (const h of items.hazards) if (h.alive && h.kind !== 'firebar') consider(h.x, h.z, (h.r || 1.2) + (h.kind === 'walker' ? h.range * 0.15 : 0));
+    const sp = Math.max(8, k.vf);
+    const pose = this._pose || (this._pose = {});
+    for (const h of items.hazards) {
+      if (!h.alive || h.kind === 'firebar') continue;
+      const dd = (h.x - k.x) ** 2 + (h.z - k.z) ** 2;
+      if (dd > 56 * 56) continue; // far out of reach of the 26-unit look-ahead
+      switch (h.kind) {
+        case 'walker':
+        case 'stomper':
+        case 'snowman':
+          consider(h.x, h.z, (h.r || 1.2) + (h.kind === 'walker' ? h.range * 0.15 : 0));
+          break;
+        case 'roller':
+        case 'penguin':
+        case 'skier':
+        case 'cow': {
+          if (h.path !== path) {
+            consider(h.x, h.z, h.r + 0.4);
+            break;
+          }
+          // step through the next second or so: where are we both when our paths cross?
+          let meetA = -1, meetD = 0;
+          for (let tau = 0.1; sp * tau <= 26; tau += 0.1) {
+            const q = items.hazardPose(h, h.t + tau * CFG.hazardSpeed, pose);
+            let gapS = h.s + q.a - (s + sp * tau);
+            if (path.closed) gapS = ((((gapS + path.length / 2) % path.length) + path.length) % path.length) - path.length / 2;
+            if (Math.abs(gapS) > h.r + 2) continue;
+            if (meetA < 0 || Math.abs(q.d - d) < Math.abs(meetD - d)) {
+              meetA = sp * tau;
+              meetD = q.d;
+            }
+          }
+          if (meetA >= 0) nudge(meetA, meetD, h.r + 0.8, 0.22, true);
+          break;
+        }
+        case 'podoboo':
+          // a fireball is only low enough to hit near the ends of its leap: keep to the middle
+          for (const side of [-1, 1]) {
+            const e = h.path.point(h.s, h.d + side * h.span * 0.42, this._pt || (this._pt = {}));
+            consider(e.x, e.z, 1.6);
+          }
+          break;
+        case 'mole':
+        case 'geyser':
+          consider(h.x, h.z, h.r + 0.3);
+          break;
+        case 'icicle':
+          if (h.state !== 'gone' && h.state !== 'grow') consider(h.x, h.z, 1.8);
+          break;
+        default:
+          consider(h.x, h.z, (h.r || 1) + 0.5); // bumpers, poles
+      }
+    }
+    if (Math.abs(push) > 0.05) this.dodgeSide = Math.sign(push);
     return U.clamp(push, -0.9, 0.9);
   }
 
@@ -259,8 +415,8 @@ class BotBrain {
     this.itemT -= dt * CFG.botItemRate;
     const it = k.item;
     let use = false;
-    const ahead = race.karts.find((q) => q !== k && q.place === k.place - 1);
-    const behind = race.karts.find((q) => q !== k && q.place === k.place + 1);
+    const ahead = race.order[k.place - 2];
+    const behind = race.order[k.place];
     const dist = (q) => (q ? Math.hypot(q.x - k.x, q.z - k.z) : Infinity);
     if (it === 'star' || it === 'coin') use = this.itemT < 2.5;
     else if (it === 'mushroom' || it === 'triple') {
@@ -280,7 +436,11 @@ class BotBrain {
       }
       use = use || this.itemT < -9;
     } else if (it === 'red') use = this.itemT < 1 && (k.place > 1 || this.itemT < -6) && this.rnd() < 0.05 + CFG.botAggression * 0.1;
-    else if (it === 'bomb') use = (ahead && dist(ahead) < 24 && this.itemT < 1.5) || this.itemT < -7;
+    else if (it === 'bomb') {
+      // never lob a bomb onto a glide ramp we are about to take off from
+      const ramp = path.zones.some((z) => z.kind === 'glide' && z.s0 - s > -2 && z.s0 - s < 70);
+      use = !ramp && ((ahead && dist(ahead) < 24 && this.itemT < 1.5) || this.itemT < -7);
+    }
     if (use) {
       k.ctl.item = true;
       this.itemT = 1.5 + this.rnd() * 4;

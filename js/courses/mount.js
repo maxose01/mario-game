@@ -34,9 +34,9 @@ TRACK_DEFS.push({
     { r: 200, rad: 30, y: 248, bank: 55, antigrav: true, style: 'metal', hw: 9 }, // 5 anti-gravity spiral
     { s: 50, y: 244, style: 'ice', hw: 8.5 },                    // 6 cave exit
     { s: 40, y: 244 },                                           // 7 glider ramp
-    { s: 150, y: 208, wallL: false, wallR: false },              // 8 glide over the crevasse
+    { s: 150, y: 227, wallL: false, wallR: false },              // 8 glide over the crevasse
     // ---- section 2: Wobble Dam & Pine Woods ----
-    { s: 60, y: 206, wallL: true, wallR: true },                 // 9 landing by the reservoir
+    { s: 80, y: 220, wallL: true, wallR: true },                 // 9 landing by the reservoir
     { l: 150, rad: 50, y: 202 },                                 // 10 (hidden route cuts across)
     { s: 120, y: 200, style: 'stone' },                          // 11 across the dam
     { r: 100, rad: 36, y: 190, bank: 38, antigrav: true, style: 'water' }, // 12 spillway stream
@@ -51,9 +51,9 @@ TRACK_DEFS.push({
     { l: 60, rad: 80, y: 80, hw: 16 },                           // 20
     { s: 90, y: 64, hw: 12 },                                    // 21 moguls
     { s: 30, y: 62, hw: 11 },                                    // 22 the big ski jump
-    { s: 170, y: 22, wallL: false, wallR: false },               // 23 glide with boost rings
-    { s: 60, y: 20, wallL: true, wallR: true },                  // 24 landing
-    { r: 60, rad: 40, y: 18, hw: 9 },                            // 25
+    { s: 170, y: 41, wallL: false, wallR: false },               // 23 glide with boost rings
+    { s: 80, y: 34, wallL: true, wallR: true },                  // 24 landing
+    { r: 60, rad: 40, y: 24, hw: 9 },                            // 25
     { s: 130, y: 16 },                                           // 26 cabin finish straight
   ],
   branches: [
@@ -65,7 +65,11 @@ TRACK_DEFS.push({
     { kind: 'ice', seg: 4, t: 0, t1: 1, d: 0, w: 30 },
     { kind: 'ice', seg: 6, t: 0, t1: 0.7, d: 0, w: 30 },
     { kind: 'boost', seg: 6, t: 0.8, len: 6, d: 0, w: 5 },
-    { kind: 'glide', seg: 7, t: 0.5, len: 10, d: 0, w: 30, h: 2.6 },
+    // glider chasms: a glider flies the same arc at any speed, so the far side (seg 8 / 23 end
+    // heights) sits just under where that arc arrives and the rings sit on it; the full-width
+    // pad launches everyone boosted (tests/sim.js checks landings and rings)
+    { kind: 'boost', seg: 7, t: 0.12, len: 7, d: 0, w: 26 },
+    { kind: 'glide', seg: 7, t: 0.5, len: 10, d: 0, w: 30, h: 1.4 },
     { kind: 'gap', seg: 7, t: 0.75, len: 155, d: 0, w: 80 },
     { kind: 'boost', seg: 11, t: 0.5, len: 6, d: 3.5, w: 4 },
     { kind: 'current', seg: 12, t: 0, t1: 1, d: 0, w: 40, flow: 9 },
@@ -75,18 +79,18 @@ TRACK_DEFS.push({
     { kind: 'hump', seg: 21, t: 0.15, len: 8, d: 0, w: 30, h: 1.1 },
     { kind: 'hump', seg: 21, t: 0.35, len: 8, d: 0, w: 30, h: 1.3 },
     { kind: 'hump', seg: 21, t: 0.55, len: 8, d: 0, w: 30, h: 1.1 },
-    { kind: 'boost', seg: 22, t: 0.1, len: 6, d: 0, w: 6 },
-    { kind: 'glide', seg: 22, t: 0.4, len: 10, d: 0, w: 30, h: 3 },
+    { kind: 'boost', seg: 22, t: 0.1, len: 6, d: 0, w: 32 },
+    { kind: 'glide', seg: 22, t: 0.4, len: 10, d: 0, w: 30, h: 2 },
     { kind: 'gap', seg: 22, t: 0.75, len: 168, d: 0, w: 80 },
     { kind: 'boost', path: 'woods', u: 0.5, len: 6, d: 0, w: 5 },
     { kind: 'ice', path: 'icefall', u: 0.2, u1: 0.8, d: 0, w: 20 },
     { kind: 'boost', path: 'icefall', u: 0.5, len: 6, d: 0, w: 5 },
   ],
   rings: [
-    { seg: 23, t: 0.2, d: 0, h: 5 },
-    { seg: 23, t: 0.45, d: 0, h: 6 },
-    { seg: 23, t: 0.7, d: 0, h: 9 },
-    { seg: 8, t: 0.4, d: 0, h: 6 },
+    { seg: 23, t: 0.2, d: 0, h: 8.4, r: 4 },
+    { seg: 23, t: 0.45, d: 0, h: 7.9, r: 4 },
+    { seg: 23, t: 0.7, d: 0, h: 7.8, r: 4 },
+    { seg: 8, t: 0.4, d: 0, h: 9, r: 4 },
   ],
   boxes: [
     { seg: 0, t: 0.62, d: [-6, -2, 2, 6] },

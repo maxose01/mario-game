@@ -4,12 +4,17 @@
 // and grain texture, a darkened clay rim (like the outlines in the side-scroller), and "boil":
 // every vertex is nudged by smooth noise that re-rolls 12 times a second, so silhouettes wobble
 // like hand-animated plasticine while motion itself stays smooth.
+// The lighting is nudged toward plasticine too: a warm glow where the light rolls off a form (a
+// little light gets through the clay at the terminator), fingerprints that are a touch glossier
+// than the rest, and a cool tint (uShade, set per world by the sky) in the shade and in cast
+// shadows, so the sun's shadows read as coloured clay rather than grey.
 // Geometry helpers build lumpy, vertex-coloured primitives that merge into a few big meshes.
 
 const Clay3D = {
-  uniforms: { uBoil: { value: 0 }, uBoilAmt: { value: 1 }, uRim: { value: 0.38 } },
+  uniforms: { uBoil: { value: 0 }, uBoilAmt: { value: 1 }, uRim: { value: 0.38 }, uShade: { value: new THREE.Color(0, 0, 0) } },
   tex: {},
   mats: {},
+  _chunks: null,
 
   init() {
     this.tex.grain = this.grainTexture(256);
@@ -80,7 +85,10 @@ const Clay3D = {
       map: o.map !== undefined ? o.map : this.tex.grain,
       bumpMap: o.bump === false ? null : this.tex.grain,
       bumpScale: o.bumpScale !== undefined ? o.bumpScale : 0.6,
-      roughness: o.rough !== undefined ? o.rough : 0.72,
+      // thumbprints and smoothed patches catch the light a little more than the grainy rest
+      // (the grain map averages ~0.85, so the base roughness is raised to match)
+      roughnessMap: o.bump === false ? null : this.tex.grain,
+      roughness: (o.rough !== undefined ? o.rough : 0.72) * (o.bump === false ? 1 : 1.17),
       metalness: o.metal || 0,
       emissive: o.emissive !== undefined ? o.emissive : 0x000000,
       emissiveIntensity: o.emissiveIntensity !== undefined ? o.emissiveIntensity : 1,
@@ -129,8 +137,10 @@ if (uWob > 0.0) {
   transformed += objectNormal * n * uWob * uBoilAmt;
 }`,
         );
+      sh.uniforms.uShade = U3.uShade;
+      const ch = this.chunks();
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform float uRim; uniform float uRimK;')
+        .replace('#include <common>', '#include <common>\nuniform float uRim; uniform float uRimK; uniform vec3 uShade;')
         .replace(
           '#include <normal_fragment_maps>',
           `#include <normal_fragment_maps>
@@ -138,9 +148,42 @@ if (uWob > 0.0) {
   float clayRim = 1.0 - abs(dot(normalize(normal), normalize(vViewPosition)));
   diffuseColor.rgb *= 1.0 - uRim * uRimK * pow(clayRim, 2.4);
 }`,
+        )
+        .replace('#include <lights_physical_pars_fragment>', ch.pars)
+        .replace('#include <lights_fragment_begin>', 'float clayShd = 1.0;\nfloat clayVis = 1.0;\n' + ch.begin)
+        .replace(
+          '#include <lights_fragment_end>',
+          `#include <lights_fragment_end>
+reflectedLight.indirectDiffuse += ( 1.0 - clayVis ) * uShade * BRDF_Lambert( material.diffuseColor );`,
         );
     };
-    m.customProgramCacheKey = () => 'clay' + (wobble > 0 ? 'w' : '') + rimK;
+    // wobble, freq and rim are uniforms, so every clay material shares one shader per variant
+    // (fewer programs to compile when a course first comes into view)
+    m.customProgramCacheKey = () => 'clay2';
+  },
+
+  // three's lighting chunks with the clay tweaks, patched once. A warm, slightly red tint where
+  // the light rolls off a form, and clayVis: how much the shadow-casting sun reaches this point
+  // (its shadow map times a soft facing term). Where it doesn't, the shade side and cast
+  // shadows pick up uShade instead of going flat grey. Without shadow maps clayVis stays 1.
+  // If three's chunk text ever changes, a replace simply finds nothing and the look stays plain.
+  chunks() {
+    if (this._chunks) return this._chunks;
+    const C = THREE.ShaderChunk;
+    const lambert = 'reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );';
+    const pars = C.lights_physical_pars_fragment.replace(
+      lambert,
+      `vec3 clayTerm = mix( vec3( 1.22, 0.86, 0.78 ), vec3( 1.0 ), smoothstep( 0.0, 0.42, dotNL ) );
+	reflectedLight.directDiffuse += irradiance * clayTerm * BRDF_Lambert( material.diffuseColor );`,
+    );
+    const shadow = 'directLight.color *= ( directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;';
+    const begin = C.lights_fragment_begin.replace(
+      shadow,
+      `${shadow.replace('directLight.color *=', 'clayShd =')}
+		clayVis = min( clayVis, clayShd * smoothstep( 0.0, 0.3, dot( geometryNormal, directLight.direction ) ) );
+		directLight.color *= clayShd;`,
+    );
+    return (this._chunks = { pars, begin });
   },
 };
 
