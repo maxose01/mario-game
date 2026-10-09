@@ -57,6 +57,7 @@
       </section>
       <section class="card players" id="players"></section>
       <div class="sticky">
+        <button type="button" class="cfg" id="lobbyCfg" aria-label="Controller settings and fullscreen"><i aria-hidden="true">⚙</i>Controls</button>
         <button type="button" class="go ready" id="readyBtn">I'm ready!</button>
       </div>
     </main>
@@ -103,18 +104,6 @@
         </section>
       </div>
       <div class="banner" id="banner" hidden></div>
-      <div class="sheet" id="sheet" hidden>
-        <div class="card">
-          <h2>Controller</h2>
-          <div class="opt"><span>Steering</span><div class="seg" id="optSteer"></div></div>
-          <div class="opt"><span>Auto-gas</span><div class="seg" id="optGas"></div></div>
-          <div class="opt"><span>Haptics</span><div class="seg" id="optBuzz"></div></div>
-          <p class="note" id="buzzNote" hidden></p>
-          <button type="button" id="fsBtn">Fullscreen</button>
-          <button type="button" id="pauseBtn">Pause the race</button>
-          <button type="button" class="go" id="sheetClose">Back to racing</button>
-        </div>
-      </div>
     </main>
 
     <!-- results -->
@@ -133,6 +122,22 @@
         <p class="wait" id="rWait">Waiting for the race leader…</p>
       </div>
     </main>
+
+    <!-- controller settings: from the lobby (the Controls button) or mid-race (minus) -->
+    <div class="sheet" id="sheet" hidden>
+      <div class="card">
+        <h2>Controller</h2>
+        <div class="opt"><span>Steering</span><div class="seg" id="optSteer"></div></div>
+        <p class="note" id="steerNote"></p>
+        <div class="opt"><span>Auto-gas</span><div class="seg" id="optGas"></div></div>
+        <div class="opt"><span>Haptics</span><div class="seg" id="optBuzz"></div></div>
+        <p class="note" id="buzzNote" hidden></p>
+        <button type="button" id="fsBtn">Fullscreen</button>
+        <p class="note" id="fsNote" hidden>iPhone: tap Share, then Add to Home Screen, and open Clay Kart from there for a full-screen controller.</p>
+        <button type="button" id="pauseBtn">Pause the race</button>
+        <button type="button" class="go" id="sheetClose">Back to racing</button>
+      </div>
+    </div>
 
     <div class="overlay" id="overlay" hidden><div class="card"><p id="overlayText">Connecting…</p><button type="button" id="overlayBtn" hidden>Try again</button></div></div>
 

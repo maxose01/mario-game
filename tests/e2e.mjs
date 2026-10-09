@@ -135,17 +135,33 @@ try {
   await bo.click('#tabs button[data-kind="character"]');
   await bo.click('#parts .part:has-text("Dumpling")');
   await bo.click('#tabs button[data-kind="paint"]');
-  const bankBefore = await host.evaluate(() => Save.data.bank);
+  // every racer has a wallet of their own
+  const wallets = () => host.evaluate(() => Party.list().map((p) => Save.wallet(p).coins));
+  const walletsBefore = await wallets();
+  check('every racer starts with a wallet of their own', walletsBefore.length === 2 && walletsBefore.every((c) => c === 60), JSON.stringify(walletsBefore));
   await bo.click('#parts .part:has-text("Tangerine")');
-  await host.waitForFunction(() => Save.owns('paint', 'tangerine'), null, { timeout: 5000 });
+  await host.waitForFunction(() => Save.owns(Save.wallet(Party.players[1]), 'paint', 'tangerine'), null, { timeout: 5000 });
   await bo.click('#parts .part:has-text("Tangerine")');
   await host.waitForFunction(() => Party.players[1].config.paint === 'tangerine', null, { timeout: 5000 });
   const cfg = await host.evaluate(() => Party.players[1].config);
   check('phone changes the racer', cfg.character === 'dumpling', JSON.stringify(cfg));
-  check('phone buys a paint from the shared bank', (await host.evaluate(() => Save.data.bank)) === bankBefore - 20, `bank ${bankBefore} -> ${await host.evaluate(() => Save.data.bank)}`);
+  const walletsAfter = await wallets();
+  check('a phone buys a paint from its own wallet, not the others\'', walletsAfter[1] === walletsBefore[1] - 20 && walletsAfter[0] === walletsBefore[0], `${JSON.stringify(walletsBefore)} -> ${JSON.stringify(walletsAfter)}`);
+  check('what one racer buys is theirs alone', await host.evaluate(() => !Save.owns(Save.wallet(Party.players[0]), 'paint', 'tangerine')));
+  await bo.waitForFunction((c) => document.getElementById('bank').textContent === String(c), walletsAfter[1], { timeout: 5000 }).catch(() => {});
+  check('each phone shows its own coins', (await ana.textContent('#bank')) === String(walletsAfter[0]) && (await bo.textContent('#bank')) === String(walletsAfter[1]), `${await ana.textContent('#bank')} / ${await bo.textContent('#bank')}`);
   await bo.click('#parts .part:has-text("Gold Leaf")');
   await wait(400);
-  check('cannot buy what the bank cannot afford', !(await host.evaluate(() => Save.owns('paint', 'gold'))));
+  check('cannot buy what the wallet cannot afford', !(await host.evaluate(() => Save.owns(Save.wallet(Party.players[1]), 'paint', 'gold'))));
+  // controller settings before the race: steering, haptics and full screen from the lobby
+  await ana.click('#lobbyCfg');
+  await ana.click('#optSteer button[data-v="buttons"]');
+  await ana.click('#optBuzz button[data-v="light"]');
+  const lobbySheet = await ana.evaluate(() => ({ open: !document.getElementById('sheet').hidden, pause: !document.getElementById('pauseBtn').hidden, done: document.getElementById('sheetClose').textContent, steer: P.opts.steer, haptics: P.opts.haptics, saved: JSON.parse(localStorage.getItem('claykart.pad.opts')).steer }));
+  check('the controller settings open from the lobby (steering, haptics, full screen)', lobbySheet.open && !lobbySheet.pause && lobbySheet.done === 'Done' && lobbySheet.steer === 'buttons' && lobbySheet.haptics === 'light' && lobbySheet.saved === 'buttons', JSON.stringify(lobbySheet));
+  await ana.click('#optSteer button[data-v="drag"]');
+  await ana.click('#optBuzz button[data-v="full"]');
+  await ana.click('#sheetClose');
 
   // ---- leader settings & ready ----
   await ana.click('#tracks button:has-text("Sherbet Slopes")');
@@ -308,9 +324,9 @@ try {
     }
   });
   await host.waitForFunction(() => App.screen === 'results', null, { timeout: 40000 });
-  const res = await host.evaluate(() => ({ rows: App.lastResults.length, bank: Save.data.bank, races: Save.data.races }));
+  const res = await host.evaluate(() => ({ rows: App.lastResults.length, races: Save.data.races, paid: App.lastResults.filter((r) => r.slot >= 0).map((r) => [r.slot, r.earned, Save.wallet(Party.players[r.slot]).coins]) }));
   check('results with every racer', res.rows === 8, JSON.stringify(res));
-  check('race coins go into the bank', res.bank > bankBefore - 20 && res.races === 1);
+  check('race coins go into each racer\'s own wallet', res.races === 1 && res.paid.length === 2 && res.paid.every(([slot, earned, coins]) => coins >= walletsAfter[slot] + earned), JSON.stringify(res.paid));
   await ana.waitForSelector('#v-results:not([hidden])', { timeout: 10000 });
   check('phones show their result', /\d(st|nd|rd|th)/.test(await ana.textContent('#rPlace')));
   check('leader phone gets the next-race buttons', await ana.isVisible('#rLead'));
@@ -410,19 +426,20 @@ try {
   await host.waitForFunction(() => App.screen === 'lobby', null, { timeout: 10000 });
 
   // ---- a solo garage purchase on the big screen ----
+  const boCoins = await host.evaluate(() => Save.wallet(Party.players[1]).coins);
   await host.evaluate(() => {
-    Save.data.bank = 500;
+    Save.wallet(Party.players[0]).coins = 500;
     Save.persist();
   });
   await host.click('#slots .slot:nth-child(1) .slot-acts button:has-text("Garage")');
   await host.waitForFunction(() => App.screen === 'garage', null, { timeout: 5000 });
   await host.click('#garageTabs .tab:has-text("Kart")');
   await host.click('#garageParts .part:has-text("Comet Sled")');
-  check('big-screen garage buys and fits a kart body', await host.evaluate(() => Save.owns('body', 'rocket') && Party.players[0].config.body === 'rocket' && Save.data.bank === 320));
+  check('big-screen garage buys and fits a kart body from that racer\'s wallet', await host.evaluate((bc) => Save.owns(Save.wallet(Party.players[0]), 'body', 'rocket') && Party.players[0].config.body === 'rocket' && Save.wallet(Party.players[0]).coins === 320 && Save.wallet(Party.players[1]).coins === bc && !Save.owns(Save.wallet(Party.players[1]), 'body', 'rocket'), boCoins));
   await wait(500);
   await shot(host, 'garage');
   await ana.waitForFunction(() => document.querySelector('#bank').textContent === '320', null, { timeout: 5000 }).catch(() => {});
-  check('phones see the new bank balance', (await ana.textContent('#bank')) === '320');
+  check('the phone sees its new balance, the other phone keeps its own', (await ana.textContent('#bank')) === '320' && (await bo.textContent('#bank')) === String(boCoins), `${await ana.textContent('#bank')} / ${await bo.textContent('#bank')}`);
 } catch (e) {
   check('test run completed without exceptions', false, e.message);
 } finally {

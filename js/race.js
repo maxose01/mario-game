@@ -356,7 +356,8 @@ class Race {
   }
 }
 
-// Coins added to the garage bank for a finish: everything picked up plus a placing bonus.
+// Coins a racer earns for a finish (into their own wallet): everything picked up plus a placing
+// bonus.
 function placeBonus(place, count) {
   const table = [15, 11, 8, 6, 4, 3, 2, 1];
   const i = Math.round(((place - 1) / Math.max(1, count - 1)) * 7);

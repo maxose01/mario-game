@@ -21,8 +21,10 @@ npm start            # or: node server.js   (no install needed, Node 18+)
 2. Choose **Party Race**. A QR code and a four-letter room code appear.
 3. Each player scans the QR code (or opens `pad.html` and types the code). Phones must be on
    the same Wi-Fi as the server.
-4. On the phone: pick a racer, kart, wheels and paint (buy more with the party's coins), then
-   tap **I'm ready!**. The first player is the race leader and can choose the course, laps,
+4. On the phone: pick a racer, kart, wheels and paint (buy more with the coins in your own wallet), then
+   tap **I'm ready!**. **Controls** (next to it) sets the steering (drag, tilt or arrow
+   buttons), auto-gas, haptics and full screen before the race (− opens the same settings
+   mid-race). The first player is the race leader and can choose the course, laps,
    engine class, bots and items from their phone; the big screen has the same controls. A race
    only starts once every phone has tapped Ready: the big screen's lobby list gives each
    racer's seat a green READY or amber NOT READY badge (also shown under their name over their
@@ -103,8 +105,8 @@ continuous rumble. The phone plays them on its vibration motor (`js/buzz.js`).
 
 A vibration motor has no volume knob, so strength becomes pulse length and a rumble becomes a
 train of pulses whose duty cycle is its amplitude. **Haptics** (Off, Light, Strong) is in the
-controller settings (the − button). Android phones get all of it. iPhones don't let web pages
-drive the vibration motor; the controller falls back to the tap that Safari's switch control
+controller settings (the **Controls** button in the phone's lobby, or − during a race).
+Android phones get all of it. iPhones don't let web pages drive the vibration motor; the controller falls back to the tap that Safari's switch control
 makes, so an iPhone feels single taps for key presses and the bigger moments where iOS allows
 it, but no rumble.
 
@@ -148,7 +150,7 @@ class; the results say whether you beat it (or the ghost).
 at the edge of a lava bridge, out on the ice). Carry it into the locked gate and the door
 sinks into the ground for a few seconds: a shortcut with coins, item boxes and boost pads.
 Anyone right behind you can slip through too. Finding a route the first time adds 15 coins to
-the bank, and bots hunt for keys as well.
+the finder's wallet, and bots hunt for keys as well.
 
 **Racing.** Hop-drifts charge blue, orange and purple sparks for mini-turbos, rocket starts
 (hit the gas as the **1** appears), trick boosts off ramps, boost pads, off-road and mud,
@@ -172,8 +174,11 @@ their own camera, HUD, item slot and position, plus a shared minimap.
 King Mudlet), six kart bodies, four wheel sets and eleven paints (including shimmering Gold Leaf
 and Rainbow).
 Each part changes speed, acceleration, weight, handling, traction and mini-turbo; the stat bars
-preview the difference before you buy. Coins collected in races plus a placing bonus fill a
-shared party bank, saved in the big screen's browser.
+preview the difference before you buy. Every racer has a wallet of their own: the coins they
+collect in a race plus a placing bonus go into it, and they buy parts from it for their own kart
+(what one racer buys is theirs, not everyone's). Wallets are saved in the big screen's browser:
+a phone gets its wallet back whenever it rejoins (it is kept by the phone's id), and a keyboard,
+gamepad or touch racer keeps the wallet of the seat they joined with.
 
 ## Edit Panel
 
@@ -226,7 +231,7 @@ js/kart3d.js        clay karts and drivers (gliders, hover wheels)
 js/fx3d.js          particles, item boxes, coins, keys, shells, rings, hazards, rescue clouds
 js/view.js          split-screen cameras and the race HUD
 js/scenes3d.js      the clay showroom behind the lobby, garage and podium
-js/party.js         player slots, phones, the coin bank and garage unlocks
+js/party.js         player slots, phones, every racer's wallet (coins and parts)
 js/net.js           local WebSocket and online WebRTC transports
 js/screens.js       menu screens
 js/icons.js         2D clay icons (items, racers, parts) for the HUD and the phone

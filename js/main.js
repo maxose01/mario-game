@@ -262,7 +262,7 @@ const App = {
       this.showroom.setLayout('row', Party.players.map((p) => p && { config: p.config, color: SLOT_COLORS[p.slot], label: p.name, slot: p.slot }));
     } else if (scr === 'garage') {
       const p = Screens.garagePlayer();
-      const cfg = p ? p.config : Save.ownedConfig(Save.data.local.kb && Save.data.local.kb.config);
+      const cfg = p ? p.config : Save.ownedConfig(Save.data.local.kb && Save.data.local.kb.config, Save.wallet('local:kb'));
       this.showroom.setLayout('single', [{ config: cfg, color: p ? SLOT_COLORS[p.slot] : '#8a6a9a' }]);
     } else if (scr === 'results' && this.lastResults) {
       this.showroom.setLayout('podium', this.lastResults.slice(0, 3).map((r) => ({ config: r.config, color: r.slot >= 0 ? SLOT_COLORS[r.slot] : null, label: r.name, slot: r.slot })));
@@ -548,9 +548,11 @@ const App = {
         case 'gate':
           Sound.play('gate');
           if (mine && Save.routeFound(race.track.id, e.a.path.id)) {
-            Save.data.bank += 15;
+            // finding a secret route pays 15 coins into the finder's own wallet
+            const finder = Party.players[k.slot];
+            if (finder) Save.wallet(finder).coins += 15;
             Save.persist();
-            this.newRoutes = (this.newRoutes || []).concat(e.a.name);
+            this.newRoutes = (this.newRoutes || []).concat(`${finder ? finder.name : 'You'} found a secret route: ${e.a.name}! +15 coins`);
           }
           break;
         case 'locked':
@@ -658,13 +660,19 @@ const App = {
     if (!race || this.screen !== 'race') return;
     const rows = race.results();
     const n = rows.length;
-    const news = (this.newRoutes || []).map((r) => `Secret route found: ${r}! +15 coins`);
+    const news = (this.newRoutes || []).slice();
     this.newRoutes = [];
-    let earned = 0;
+    // every racer's winnings go into their own wallet
+    const paid = [];
     for (const r of rows) {
       if (r.slot < 0) continue;
       r.earned = r.coins + placeBonus(r.place, n);
-      earned += r.earned;
+      const p = Party.players[r.slot];
+      if (p) {
+        const w = Save.wallet(p);
+        w.coins += r.earned;
+        paid.push(`${p.name} +${r.earned} (now ${w.coins})`);
+      }
       const best = Save.data.best[race.track.id];
       if (r.finished && (!best || r.time < best)) {
         Save.data.best[race.track.id] = r.time;
@@ -672,10 +680,9 @@ const App = {
       }
       if (r.place === 1) Save.data.wins++;
     }
-    Save.data.bank += earned;
     Save.data.races++;
     Save.persist();
-    news.unshift(`+${earned} coins to the garage bank (now ${Save.data.bank})`);
+    if (paid.length) news.unshift('Coins: ' + paid.join(' · '));
     const staff = this.staffNews(race, rows);
     if (staff) news.push(staff);
     this.lastResults = rows;
@@ -692,7 +699,7 @@ const App = {
     for (const p of Party.list()) {
       if (p.kind !== 'phone' || !p.connected) continue;
       const mine = rows.find((r) => r.slot === p.slot);
-      Party.link.send(p.pid, { t: 'results', place: mine ? mine.place : 0, n, earned: mine ? mine.earned : 0, bank: Save.data.bank, note: staff, rows: rows.slice(0, 8).map((r) => ({ place: r.place, name: r.name, slot: r.slot, time: fmtTime(r.time) })) });
+      Party.link.send(p.pid, { t: 'results', place: mine ? mine.place : 0, n, earned: mine ? mine.earned : 0, bank: Save.wallet(p).coins, note: staff, rows: rows.slice(0, 8).map((r) => ({ place: r.place, name: r.name, slot: r.slot, time: fmtTime(r.time) })) });
     }
   },
 

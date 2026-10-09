@@ -1,41 +1,61 @@
 'use strict';
 // The party: up to four racers on one big screen. Each slot is either a phone (joined over the
 // network with the room code / QR) or a local controller (keyboard, gamepad, touch).
-// Also owns the save: the shared coin bank, garage unlocks, discovered routes and best times.
+// Also owns the save: every racer's own wallet (coins and the parts they bought), discovered
+// routes and best times.
 
 const SAVE_KEY = 'claykart.save.v1';
+const START_COINS = 60;
 
 const Save = {
   data: null,
   fresh() {
-    return { v: 1, bank: 60, owned: freeParts(), routes: {}, best: {}, wins: 0, races: 0, local: {} };
+    return { v: 2, wallets: {}, unlocked: {}, routes: {}, best: {}, wins: 0, races: 0, local: {} };
   },
   load() {
     const d = Store.get(SAVE_KEY, null);
-    this.data = d && d.v === 1 ? Object.assign(this.fresh(), d) : this.fresh();
-    this.data.owned = Object.assign(freeParts(), this.data.owned);
+    if (d && d.v === 2) this.data = Object.assign(this.fresh(), d);
+    else if (d && d.v === 1) {
+      // an older save kept one bank for the whole party: the parts it unlocked stay unlocked for
+      // everyone, and from now on everyone has a wallet of their own
+      this.data = Object.assign(this.fresh(), { unlocked: d.owned || {}, routes: d.routes || {}, best: d.best || {}, wins: d.wins || 0, races: d.races || 0, local: d.local || {} });
+    } else this.data = this.fresh();
+    for (const w of Object.values(this.data.wallets)) w.owned = Object.assign(freeParts(), w.owned);
   },
   persist() {
     Store.set(SAVE_KEY, this.data);
   },
-  owns(kind, id) {
-    return !!this.data.owned[partKey(kind, id)];
+  // Each racer's own wallet: { coins, owned }. A phone keeps its wallet by the phone's id, so it
+  // is still there when the phone rejoins; a racer on the big screen keeps it by the seat they
+  // joined with (keyboard, a gamepad, touch). p is a party player or a wallet key.
+  walletKey(p) {
+    if (!p.walletKey) p.walletKey = p.kind === 'phone' ? 'phone:' + (p.clientId || p.name) : 'local:' + p.src;
+    return p.walletKey;
   },
-  // Pay from the shared bank; returns an error string or null.
-  buy(kind, id) {
+  wallet(p) {
+    const key = typeof p === 'string' ? p : this.walletKey(p);
+    let w = this.data.wallets[key];
+    if (!w) w = this.data.wallets[key] = { coins: START_COINS, owned: Object.assign(freeParts(), this.data.unlocked) };
+    return w;
+  },
+  owns(w, kind, id) {
+    return !!w.owned[partKey(kind, id)];
+  },
+  // Pay from a racer's own wallet; returns an error string or null.
+  buy(w, kind, id) {
     const p = findPart(kind, id);
     if (!p) return 'Unknown part';
-    if (this.owns(kind, id)) return null;
-    if (this.data.bank < p.price) return `Needs ${p.price - this.data.bank} more coins`;
-    this.data.bank -= p.price;
-    this.data.owned[partKey(kind, id)] = true;
+    if (this.owns(w, kind, id)) return null;
+    if (w.coins < p.price) return `Needs ${p.price - w.coins} more coins`;
+    w.coins -= p.price;
+    w.owned[partKey(kind, id)] = true;
     this.persist();
     return null;
   },
-  // Everything a config uses must be owned; swap anything locked for the default.
-  ownedConfig(cfg) {
+  // Everything a config uses must be in the racer's wallet; swap anything else for the default.
+  ownedConfig(cfg, w) {
     cfg = sanitizeKart(cfg);
-    for (const k of CATALOG_KINDS) if (!this.owns(k, cfg[k])) cfg[k] = DEFAULT_KART[k];
+    for (const k of CATALOG_KINDS) if (!this.owns(w, k, cfg[k])) cfg[k] = DEFAULT_KART[k];
     return cfg;
   },
   routeFound(track, route) {
@@ -105,8 +125,9 @@ const Party = {
       }
       p = this.players[slot] = {
         slot, kind: 'phone', clientId: id, name: cleanName(hello.name) || NAME_POOL[slot], ready: false,
-        config: Save.ownedConfig(hello.config), ctl: blankCtl(), itemSeen: 0, autoGas: true,
+        ctl: blankCtl(), itemSeen: 0, autoGas: true,
       };
+      p.config = Save.ownedConfig(hello.config, Save.wallet(p));
       Sound.play('join');
     }
     if (p.pid && p.pid !== pid) this.byPid.delete(p.pid);
@@ -152,7 +173,7 @@ const Party = {
         break;
       }
       case 'cfg':
-        p.config = Save.ownedConfig(m.config);
+        p.config = Save.ownedConfig(m.config, Save.wallet(p));
         App.onPartyChange('config', p);
         this.changed();
         break;
@@ -161,11 +182,12 @@ const Party = {
         this.changed();
         break;
       case 'buy': {
-        const err = Save.buy(m.kind, m.id);
+        const w = Save.wallet(p);
+        const err = Save.buy(w, m.kind, m.id);
         if (!err) {
           Sound.play('buy');
           p.config[m.kind] = m.id;
-          p.config = Save.ownedConfig(p.config);
+          p.config = Save.ownedConfig(p.config, w);
         }
         this.link.send(pid, { t: 'bought', kind: m.kind, id: m.id, err });
         App.onPartyChange('config', p);
@@ -199,8 +221,9 @@ const Party = {
     const saved = Save.data.local[src] || {};
     const p = (this.players[slot] = {
       slot, kind: 'local', src, name: saved.name || (src.startsWith('pad') ? 'Pad ' + (Number(src.slice(3)) + 1) : SOURCE_LABELS[src] ? NAME_POOL[slot] : 'Player'),
-      ready: true, connected: true, config: Save.ownedConfig(saved.config), ctl: blankCtl(), autoGas: src === 'touch',
+      ready: true, connected: true, ctl: blankCtl(), autoGas: src === 'touch',
     });
+    p.config = Save.ownedConfig(saved.config, Save.wallet(p));
     Sound.play('join');
     this.changed();
     return p;
@@ -217,7 +240,7 @@ const Party = {
     this.changed();
   },
   setLocalConfig(p, cfg) {
-    p.config = Save.ownedConfig(cfg);
+    p.config = Save.ownedConfig(cfg, Save.wallet(p));
     if (p.kind === 'local') {
       Save.data.local[p.src] = { config: p.config, name: p.name };
       Save.persist();
@@ -272,9 +295,10 @@ const Party = {
     const lead = this.leader();
     for (const p of this.list()) {
       if (p.kind !== 'phone' || !p.connected) continue;
+      const w = Save.wallet(p);
       this.link.send(p.pid, {
         t: 'state', phase: App.phase(), racing: p.kartIdx !== undefined, slot: p.slot, color: SLOT_COLORS[p.slot], name: p.name, leader: lead === p, ready: p.ready,
-        config: p.config, owned: Save.data.owned, bank: Save.data.bank, settings: this.settings, players, code: this.code,
+        config: p.config, owned: w.owned, bank: w.coins, settings: this.settings, players, code: this.code,
         tracks: this.courseList(),
       });
     }

@@ -66,17 +66,17 @@ const EditPanel = {
       ['Skip a lap', () => this.skip()], // "Skip a section" on a point-to-point run
       ['Finish the race', () => this.finishRace()],
       ['Restart the race', () => (App.race ? App.leaderAction('restart') : this.flash('Start a race first'))],
-      ['+100 garage coins', () => {
-        Save.data.bank += 100;
+      ['+100 coins each', () => {
+        for (const w of this.wallets()) w.coins += 100;
         Save.persist();
         Party.changed();
-        this.flash('Bank: ' + Save.data.bank + ' coins');
+        this.flash('+100 coins in every racer\'s wallet');
       }],
       ['Unlock every part', () => {
-        for (const k of CATALOG_KINDS) for (const p of CATALOG[k]) Save.data.owned[partKey(k, p.id)] = true;
+        for (const w of this.wallets()) for (const k of CATALOG_KINDS) for (const p of CATALOG[k]) w.owned[partKey(k, p.id)] = true;
         Save.persist();
         Party.changed();
-        this.flash('Every part unlocked');
+        this.flash('Every part unlocked for every racer');
       }],
       ['Bots: everyone a bot', () => this.forHumans((k) => App.race.setAutopilot(k, !k.auto), 'Autopilot toggled')],
     ];
@@ -135,7 +135,7 @@ const EditPanel = {
       reset.textContent = 'Garage reset';
       Save.data = Save.fresh();
       Save.persist();
-      for (const p of Party.list()) p.config = Save.ownedConfig(p.config);
+      for (const p of Party.list()) p.config = Save.ownedConfig(p.config, Save.wallet(p));
       Party.changed();
       App.refreshShowroom();
     });
@@ -144,6 +144,11 @@ const EditPanel = {
     $('epImport').addEventListener('click', () => this.importJSON());
   },
 
+  // The wallets of everyone in the party (with nobody seated, the keyboard's).
+  wallets() {
+    const seated = Party.list();
+    return seated.length ? seated.map((p) => Save.wallet(p)) : [Save.wallet('local:kb')];
+  },
   forHumans(fn, msg) {
     const r = App.race;
     if (!r || App.screen !== 'race') return this.flash('Start a race first');

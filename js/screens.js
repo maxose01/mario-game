@@ -241,10 +241,17 @@ const Screens = {
     return p;
   },
 
+  // The wallet of whoever is in the garage (with nobody seated: the keyboard's).
+  garageWallet() {
+    const p = this.garagePlayer();
+    return p ? Save.wallet(p) : Save.wallet('local:kb');
+  },
+
   renderGarage() {
     const G = this.garage;
     const p = this.garagePlayer();
-    $('bank').textContent = Save.data.bank;
+    const w = this.garageWallet();
+    $('bank').textContent = w.coins;
     // who is being configured
     const who = $('garageWho');
     who.innerHTML = '';
@@ -263,11 +270,11 @@ const Screens = {
       b.classList.toggle('on', b.dataset.kind === G.kind);
       b.setAttribute('aria-selected', String(b.dataset.kind === G.kind));
     }
-    const cfg = p ? p.config : Save.ownedConfig(Save.data.local.kb && Save.data.local.kb.config);
+    const cfg = p ? p.config : Save.ownedConfig(Save.data.local.kb && Save.data.local.kb.config, w);
     const parts = $('garageParts');
     parts.innerHTML = '';
     for (const part of CATALOG[G.kind]) {
-      const owned = Save.owns(G.kind, part.id);
+      const owned = Save.owns(w, G.kind, part.id);
       const on = cfg[G.kind] === part.id;
       const b = el('button', 'part' + (on ? ' on' : '') + (owned ? '' : ' locked'));
       b.type = 'button';
@@ -285,7 +292,7 @@ const Screens = {
 
   describe(part, cfg) {
     const G = this.garage;
-    const owned = Save.owns(G.kind, part.id);
+    const owned = Save.owns(this.garageWallet(), G.kind, part.id);
     $('partBlurb').textContent = (part.blurb || (part.special ? 'A shimmering special paint.' : 'A fresh coat of clay paint.')) + (owned ? '' : `  Costs ${part.price} coins.`);
     const now = kartStats(cfg);
     const next = kartStats(Object.assign({}, cfg, { [G.kind]: part.id }));
@@ -309,8 +316,9 @@ const Screens = {
   pick(part) {
     const G = this.garage;
     const p = this.garagePlayer();
-    if (!Save.owns(G.kind, part.id)) {
-      const err = Save.buy(G.kind, part.id);
+    const w = this.garageWallet();
+    if (!Save.owns(w, G.kind, part.id)) {
+      const err = Save.buy(w, G.kind, part.id);
       if (err) {
         Sound.play('locked');
         App.toast(err);
@@ -324,7 +332,7 @@ const Screens = {
       Party.setLocalConfig(p, cfg);
       if (p.kind === 'phone' && Party.link) Party.link.send(p.pid, { t: 'welcome', slot: p.slot, color: SLOT_COLORS[p.slot], name: p.name, config: p.config });
     } else {
-      Save.data.local.kb = { config: Object.assign({}, Save.ownedConfig(Save.data.local.kb && Save.data.local.kb.config), { [G.kind]: part.id }) };
+      Save.data.local.kb = { config: Object.assign({}, Save.ownedConfig(Save.data.local.kb && Save.data.local.kb.config, w), { [G.kind]: part.id }) };
       Save.persist();
     }
     this.renderGarage();

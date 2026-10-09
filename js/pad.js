@@ -175,7 +175,9 @@ function onMessage(m) {
       P.haveResults = false;
       $('hLap').textContent = m.secs ? `Section 1/${m.secs}` : `Lap 1/${P.settings ? P.settings.laps : 3}`;
       show('race');
-      goFullscreen();
+      $('sheet').hidden = true;
+      // full screen (if allowed without a tap now) and, once it is, turned on its side
+      goFullscreen(true);
       break;
     case 'hud':
       renderHud(m);
@@ -273,7 +275,7 @@ function owns(kind, id) {
 function renderLobby() {
   $('badge').textContent = 'P' + (P.slot + 1);
   $('meName').textContent = P.name;
-  $('meStatus').textContent = P.ready ? 'Ready! Waiting for the race to start' : 'Pick your racer and kart, then tap Ready';
+  $('meStatus').textContent = P.ready ? 'Ready! Tap ✓ Ready again to change your kart' : 'Pick your racer and kart, then tap Ready';
   $('bank').textContent = P.bank;
   for (const b of $('tabs').children) b.classList.toggle('on', b.dataset.kind === P.kind);
   const wrap = $('parts');
@@ -291,7 +293,7 @@ function renderLobby() {
   }
   describe(findPart(P.kind, P.config[P.kind]));
   const rb = $('readyBtn');
-  rb.textContent = P.ready ? '✓ Ready (tap to change)' : "I'm ready!";
+  rb.textContent = P.ready ? '✓ Ready' : "I'm ready!";
   rb.classList.toggle('on', P.ready);
   // leader controls: every course with its difficulty, laps (or sections) and secret route
   $('leadCard').hidden = !P.leader || !P.settings;
@@ -347,7 +349,7 @@ function difficultyPips(n) {
 }
 
 function describe(part) {
-  $('blurb').textContent = (part.blurb || (part.special ? 'A shimmering special paint.' : 'A fresh coat of clay paint.')) + (owns(P.kind, part.id) ? '' : ` Costs ${part.price} coins from the party bank.`);
+  $('blurb').textContent = (part.blurb || (part.special ? 'A shimmering special paint.' : 'A fresh coat of clay paint.')) + (owns(P.kind, part.id) ? '' : ` Costs ${part.price} coins from your wallet.`);
   const now = kartStats(P.config);
   const next = kartStats(Object.assign({}, P.config, { [P.kind]: part.id }));
   const dl = $('stats');
@@ -370,7 +372,7 @@ function describe(part) {
 function pick(part) {
   if (!owns(P.kind, part.id)) {
     if (P.bank < part.price) {
-      toast(`Needs ${part.price - P.bank} more coins. Win races to fill the bank!`);
+      toast(`Needs ${part.price - P.bank} more coins. Win races to fill your wallet!`);
       describe(part);
       return;
     }
@@ -491,14 +493,22 @@ function buildRace() {
   seg('optBuzz', [['Off', 'off'], ['Light', 'light'], ['Strong', 'full']], 'haptics');
   $('menuBtn').addEventListener('click', () => {
     Buzz.click();
-    $('sheet').hidden = false;
+    openSheet();
+  });
+  $('lobbyCfg').addEventListener('click', () => {
+    Buzz.click();
+    openSheet();
   });
   $('plusBtn').addEventListener('click', () => {
     Buzz.click();
     send({ t: 'pause' });
   });
   $('sheetClose').addEventListener('click', () => ($('sheet').hidden = true));
-  $('fsBtn').addEventListener('click', goFullscreen);
+  $('fsBtn').addEventListener('click', () => {
+    if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+    else goFullscreen(P.phase === 'race');
+  });
+  document.addEventListener('fullscreenchange', fsLabel);
   $('pauseBtn').addEventListener('click', () => {
     send({ t: 'pause' });
     $('sheet').hidden = true;
@@ -511,12 +521,30 @@ function buildRace() {
   requestAnimationFrame(animateWheel);
 }
 
+// The controller settings, from the lobby (before the race) or from minus during it.
+function openSheet() {
+  const racing = P.phase === 'race';
+  $('pauseBtn').hidden = !racing;
+  $('sheetClose').textContent = racing ? 'Back to racing' : 'Done';
+  fsLabel();
+  applyOpts();
+  $('sheet').hidden = false;
+}
+function fsLabel() {
+  const can = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+  $('fsBtn').hidden = !can;
+  $('fsBtn').textContent = document.fullscreenElement ? 'Leave full screen' : 'Full screen';
+  // iPhones can't make a web page full screen: added to the home screen it opens without bars
+  $('fsNote').hidden = can || !BUZZ_IOS;
+}
+
 function applyOpts() {
   const o = P.opts;
   if (o.steer === 'tilt' && !P.tiltOk) o.steer = 'drag';
   $('arrows').hidden = o.steer !== 'buttons';
   $('wheel').hidden = o.steer === 'buttons';
   $('steerHint').textContent = o.steer === 'tilt' ? 'Tilt your phone like a steering wheel' : o.steer === 'drag' ? 'Drag left and right to steer' : '';
+  $('steerNote').textContent = o.steer === 'tilt' ? 'Hold the phone sideways and tilt it like a steering wheel.' : o.steer === 'drag' ? 'Drag the wheel on the left half left and right.' : 'Two arrow buttons on the left half.';
   // Y throws your item backwards, or is the gas pedal when auto-gas is off
   $('v-race').querySelector('.b-gas').hidden = o.autoGas;
   $('v-race').querySelector('.b-back').hidden = !o.autoGas;
@@ -629,7 +657,7 @@ function buildResults() {
 function renderResults(m) {
   P.haveResults = true;
   $('rPlace').textContent = m.place ? ordinal(m.place) : 'Finished';
-  $('rEarned').textContent = `+${m.earned} coins · bank ${m.bank}`;
+  $('rEarned').textContent = `+${m.earned} coins · your wallet ${m.bank}`;
   $('rNote').hidden = !m.note;
   $('rNote').textContent = m.note || '';
   P.bank = m.bank;
@@ -660,14 +688,17 @@ function renderLeadGate() {
 }
 
 // ---------- phone niceties ----------
-function goFullscreen() {
+// Full screen, and for racing also turned on its side (browsers only lock the orientation of a
+// full-screen page). From the lobby it stays upright until the race starts.
+function goFullscreen(landscape) {
   const d = document.documentElement;
+  const lock = () => {
+    if (landscape && screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {});
+  };
   try {
-    if (!document.fullscreenElement && d.requestFullscreen) {
-      d.requestFullscreen({ navigationUI: 'hide' }).then(() => {
-        if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {});
-      }).catch(() => {});
-    }
+    if (document.fullscreenElement) lock();
+    else if (d.requestFullscreen) d.requestFullscreen({ navigationUI: 'hide' }).then(lock).catch(() => {});
+    else if (d.webkitRequestFullscreen) d.webkitRequestFullscreen();
   } catch (e) {
     /* optional */
   }

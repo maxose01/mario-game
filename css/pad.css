@@ -339,9 +339,25 @@ input {
   position: sticky;
   bottom: max(10px, env(safe-area-inset-bottom));
   margin-top: auto;
+  display: flex;
+  gap: 8px;
 }
 .sticky .ready {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
+}
+/* the controller settings, before the race */
+.sticky .cfg {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 700 16px/1 var(--font-display);
+  padding: 0 16px;
+}
+.sticky .cfg i {
+  font-style: normal;
+  font-size: 20px;
 }
 .sticky .ready.on {
   background: #7ddc6f;
