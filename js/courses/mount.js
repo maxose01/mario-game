@@ -71,7 +71,7 @@ TRACK_DEFS.push({
     { r: 50, rad: 90, y: 70 },                                   // 30
     { l: 40, rad: 100, y: 66 },                                  // 31 last slalom bend
     { s: 110, y: 64, hw: 12 },                                   // 32 moguls
-    { s: 30, y: 62, hw: 11 },                                    // 33 the big ski jump
+    { s: 30, y: 62, hw: 11, antigrav: true, style: 'metal' },    // 33 the big anti-gravity ski jump
     { s: 170, y: 41, wallL: false, wallR: false },               // 34 glide with boost rings
     { s: 80, y: 34, wallL: true, wallR: true },                  // 35 landing
     { r: 60, rad: 40, y: 28, hw: 9 },                            // 36
