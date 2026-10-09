@@ -772,6 +772,7 @@ const App = {
   drawNameTags(ctx) {
     const sr = this.showroom;
     const cam = sr.camera;
+    const party = Party.list().some((q) => q.kind === 'phone');
     const v = new THREE.Vector3();
     sr.slots.forEach((s, i) => {
       const p = Party.players[i];
@@ -787,7 +788,17 @@ const App = {
       Clay.rrect(ctx, x - w / 2, y - 16, w, 30, 14);
       ctx.fill();
       Clay.label(ctx, `P${i + 1} ${p.name}`, x, y - 1, 16, '#ffffff', 'center', '#2b1838');
-      if (p.kind === 'phone' && p.ready) Clay.label(ctx, '✓ ready', x, y + 26, 14, '#b7f5a8', 'center');
+      // in a party: a green READY badge under the name, or an amber NOT READY one
+      if (party) {
+        const ready = p.kind !== 'phone' || p.ready;
+        const txt = ready ? '✓ READY' : 'NOT READY';
+        ctx.font = `700 13px ${FONT}`;
+        const bw = ctx.measureText(txt).width + 20;
+        ctx.fillStyle = ready ? '#7ddc6f' : '#ffe2a8';
+        Clay.rrect(ctx, x - bw / 2, y + 17, bw, 21, 10.5);
+        ctx.fill();
+        Clay.label(ctx, txt, x, y + 27.5, 13, ready ? '#1f4f22' : '#8a5a10', 'center', ready ? '#c9f5c1' : '#fff3d6');
+      }
     });
   },
 

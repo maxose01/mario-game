@@ -154,11 +154,18 @@ try {
   check('leader phone picks the course and laps', true);
   // nobody can start until every phone has tapped Ready
   const gate = async () => ({
-    host: await host.evaluate(() => ({ off: document.getElementById('startRace').disabled, hint: document.getElementById('startHint').textContent })),
+    host: await host.evaluate(() => ({
+      off: document.getElementById('startRace').disabled,
+      hint: document.getElementById('startHint').textContent,
+      // the lobby list: the count strip and each seat's badge
+      list: document.getElementById('readyCount').textContent + ' | ' + document.getElementById('readyWho').textContent,
+      seats: [...document.querySelectorAll('#slots .slot.filled .slot-state')].map((e) => e.textContent).join(','),
+    })),
     lead: await ana.evaluate(() => ({ off: document.getElementById('leadStart').disabled, note: document.getElementById('leadWait').textContent })),
   });
   let g = await gate();
   check('no one is ready: both start buttons are off and say who to wait for', g.host.off && g.lead.off && g.host.hint.includes('Ana and Bo') && g.lead.note.includes('you and Bo'), JSON.stringify(g));
+  check('the lobby list shows nobody ready yet', g.host.list === '0 of 2 ready | Waiting for Ana and Bo' && g.host.seats === 'Not ready,Not ready', g.host.list + ' / ' + g.host.seats);
   await host.evaluate(() => App.leaderAction('start'));
   await ana.evaluate(() => send({ t: 'lead', act: 'start' }));
   await wait(400);
@@ -168,12 +175,14 @@ try {
   await ana.waitForFunction(() => /Bo/.test(document.getElementById('leadWait').textContent) && !/you/.test(document.getElementById('leadWait').textContent), null, { timeout: 5000 }).catch(() => {});
   g = await gate();
   check('one phone ready: still waiting for the other', g.host.off && g.lead.off && g.host.hint === 'Waiting for Bo to tap Ready' && g.lead.note === 'Waiting for Bo to tap Ready', JSON.stringify(g));
+  check('the lobby list marks who is ready', g.host.list === '1 of 2 ready | Waiting for Bo' && g.host.seats === '✓ Ready,Not ready', g.host.list + ' / ' + g.host.seats);
   await bo.click('#readyBtn');
   await host.waitForFunction(() => Party.list().every((p) => p.ready), null, { timeout: 5000 });
   check('ready states reach the big screen', true);
   await ana.waitForFunction(() => !document.getElementById('leadStart').disabled, null, { timeout: 5000 }).catch(() => {});
   g = await gate();
   check('everyone ready: both start buttons come on', !g.host.off && !g.lead.off && g.lead.note === '', JSON.stringify(g));
+  check('the lobby list says everyone is ready', g.host.list === "2 of 2 ready | Everyone's ready: start the race!" && g.host.seats === '✓ Ready,✓ Ready', g.host.list + ' / ' + g.host.seats);
   await wait(600);
   await shot(host, 'lobby');
   await shot(ana, 'phone-lobby');

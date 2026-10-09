@@ -67,7 +67,14 @@
                   <button type="button" class="go" id="startRace">Start race!</button>
                   <p class="hint" id="startHint"></p>
                 </div>
-                <div class="slots" id="slots"></div>
+                <div class="lobby-list">
+                  <div class="ready-bar" id="readyBar" hidden>
+                    <span class="rb-pips" id="readyPips" aria-hidden="true"></span>
+                    <b id="readyCount"></b>
+                    <span class="rb-who" id="readyWho"></span>
+                  </div>
+                  <div class="slots" id="slots"></div>
+                </div>
                 <div class="lobby-foot">
                   <button type="button" id="addKb">+ Keyboard player</button>
                   <button type="button" id="addTouch">+ Touch player</button>

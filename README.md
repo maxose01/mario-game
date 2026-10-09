@@ -24,9 +24,11 @@ npm start            # or: node server.js   (no install needed, Node 18+)
 4. On the phone: pick a racer, kart, wheels and paint (buy more with the party's coins), then
    tap **I'm ready!**. The first player is the race leader and can choose the course, laps,
    engine class, bots and items from their phone; the big screen has the same controls. A race
-   only starts once every phone has tapped Ready: until then the start buttons on the big
-   screen and the leader's phone are greyed out and say who everyone is waiting for (the same
-   goes for **Next course** and **Race again** after a race).
+   only starts once every phone has tapped Ready: the big screen's lobby list gives each
+   racer's seat a green READY or amber NOT READY badge (also shown under their name over their
+   kart) and counts them up ("1 of 3 ready · Waiting for Bo and Cy"). Until everyone is ready
+   the start buttons on the big screen and the leader's phone are greyed out (the same goes
+   for **Next course** and **Race again** after a race).
    During the race the phone turns into a handheld console tinted in your player colour: the
    steering wheel on the left half, the A B X Y buttons on the right, and a little screen in
    the middle with your place, item, lap (or section), coins and key. It vibrates with what

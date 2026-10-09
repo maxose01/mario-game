@@ -138,6 +138,26 @@ const Screens = {
     for (const b of $('optLaps').children) b.disabled = p2p;
     $('lapsNote').hidden = !p2p;
     if (p2p) $('lapsNote').textContent = `${course.name} is one run in ${courseSections(course)} sections`;
+    // the lobby list: in a party (anyone on a phone) every racer shows whether they are ready,
+    // and the strip above the cards counts them up
+    const party = Party.list().some((q) => q.kind === 'phone');
+    const isReady = (q) => q.kind !== 'phone' || q.ready;
+    const seated = Party.list();
+    $('readyBar').hidden = !party;
+    if (party) {
+      const ready = seated.filter(isReady).length, waitingFor = Party.waiting();
+      $('readyBar').classList.toggle('all', ready === seated.length);
+      $('readyCount').textContent = `${ready} of ${seated.length} ready`;
+      $('readyWho').textContent = waitingFor.length ? `Waiting for ${Party.names(waitingFor)}` : "Everyone's ready: start the race!";
+      const pips = $('readyPips');
+      pips.innerHTML = '';
+      for (const q of seated) {
+        const i = el('i', isReady(q) ? 'on' : '', isReady(q) ? '✓' : '');
+        i.style.setProperty('--sc', SLOT_COLORS[q.slot]);
+        i.title = `P${q.slot + 1} ${q.name}: ${isReady(q) ? 'ready' : 'not ready'}`;
+        pips.appendChild(i);
+      }
+    }
     // slots
     const wrap = $('slots');
     wrap.innerHTML = '';
@@ -157,8 +177,13 @@ const Screens = {
         info.appendChild(el('small', '', dev));
         row.appendChild(info);
         card.appendChild(row);
-        const st = el('div', 'slot-state', p.kind === 'phone' ? (p.ready ? '✓ Ready' : 'Picking a kart…') : findPart('character', p.config.character).name);
-        if (p.ready || p.kind === 'local') st.classList.add('ready');
+        let st;
+        if (party) {
+          // a racer on this screen is always ready; a phone only once it has tapped Ready
+          const ok = isReady(p);
+          st = el('div', 'slot-state pill' + (ok ? ' ready' : ''), ok ? '✓ Ready' : p.connected === false ? 'Reconnecting' : 'Not ready');
+          card.classList.add(ok ? 'is-ready' : 'not-ready');
+        } else st = el('div', 'slot-state ready', findPart('character', p.config.character).name);
         card.appendChild(st);
         const acts = el('div', 'slot-acts');
         const gb = el('button', '', 'Garage');
