@@ -20,7 +20,7 @@ function courseFiles() {
   return fs.readdirSync(path.join(root, 'js', 'courses')).filter((f) => f.endsWith('.js')).sort().map((f) => 'courses/' + f.slice(0, -3));
 }
 
-const SIM_FILES = ['config', 'util', 'parts', 'tracks', ...courseFiles(), 'track', 'kart', 'items', 'ai', 'race'];
+const SIM_FILES = ['config', 'util', 'parts', 'tracks', ...courseFiles(), 'track', 'kart', 'items', 'ai', 'race', 'haptics'];
 
 function loadGame(files = SIM_FILES) {
   const ctx = vm.createContext({ console, Math, JSON, Date, performance: { now: () => Date.now() } });

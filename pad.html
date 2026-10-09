@@ -60,31 +60,46 @@
       </div>
     </main>
 
-    <!-- race controller -->
+    <!-- race controller: a handheld console, a controller half on each side of the screen -->
     <main id="v-race" class="view" hidden>
-      <div class="hudbar">
-        <div class="place" id="hPlace">–</div>
-        <div class="lap" id="hLap">Lap 1/3</div>
-        <div class="coins"><i class="coin"></i><b id="hCoins">0</b></div>
-        <div class="keyi" id="hKey" hidden title="You have a key">🔑</div>
-        <div class="item" id="hItem"></div>
-        <button type="button" class="mini" id="menuBtn" aria-label="Controller settings">⚙</button>
-      </div>
-      <div class="pad">
-        <div class="steer" id="steer">
-          <div class="wheel" id="wheel"><div class="spoke"></div></div>
-          <p class="steer-hint" id="steerHint">Drag left and right to steer</p>
-          <div class="arrows" id="arrows" hidden>
-            <button type="button" data-b="left" aria-label="Steer left">◀</button>
-            <button type="button" data-b="right" aria-label="Steer right">▶</button>
+      <div class="console">
+        <!-- left half: the steering wheel (or arrow buttons), and minus for the settings -->
+        <section class="joy joy-l" aria-label="Steering">
+          <button type="button" class="sys minus" id="menuBtn" aria-label="Controller settings"><i></i></button>
+          <div class="steer" id="steer">
+            <div class="wheel" id="wheel"><div class="spoke"></div></div>
+            <p class="steer-hint" id="steerHint">Drag left and right to steer</p>
+            <div class="arrows" id="arrows" hidden>
+              <button type="button" class="dpad" data-b="left" aria-label="Steer left"><i></i></button>
+              <button type="button" class="dpad" data-b="right" aria-label="Steer right"><i></i></button>
+            </div>
           </div>
-        </div>
-        <div class="btns">
-          <button type="button" class="b-item" data-b="item">Item<small>swipe ↓ to throw back</small></button>
-          <button type="button" class="b-drift" data-b="drift">Drift<small>hold</small></button>
-          <button type="button" class="b-brake" data-b="brake">Brake</button>
-          <button type="button" class="b-gas" data-b="gas" hidden>Gas</button>
-        </div>
+          <i class="rail" aria-hidden="true"></i>
+        </section>
+
+        <!-- the screen: place, lap or section, item, coins, key -->
+        <section class="screen" aria-label="Race">
+          <div class="place" id="hPlace">–</div>
+          <div class="item" id="hItem"></div>
+          <div class="screen-row">
+            <div class="lap" id="hLap">Lap 1/3</div>
+            <div class="coins"><i class="coin"></i><b id="hCoins">0</b></div>
+            <div class="keyi" id="hKey" hidden title="You have a key">🔑</div>
+          </div>
+        </section>
+
+        <!-- right half: the A B X Y buttons, plus for pause, and the player lights -->
+        <section class="joy joy-r" aria-label="Buttons">
+          <i class="rail" aria-hidden="true"><b></b><b></b><b></b><b></b></i>
+          <button type="button" class="sys plus" id="plusBtn" aria-label="Pause the race"><i></i></button>
+          <div class="btns abxy">
+            <button type="button" class="face fx b-item" data-b="item" aria-label="Item (swipe down to throw it back)"><b>X</b><small>Item</small></button>
+            <button type="button" class="face fy b-back" data-b="back" aria-label="Throw your item backwards"><b>Y</b><small>Back</small></button>
+            <button type="button" class="face fy b-gas" data-b="gas" hidden><b>Y</b><small>Gas</small></button>
+            <button type="button" class="face fa b-drift" data-b="drift" aria-label="Drift (hold)"><b>A</b><small>Drift</small></button>
+            <button type="button" class="face fb b-brake" data-b="brake"><b>B</b><small>Brake</small></button>
+          </div>
+        </section>
       </div>
       <div class="banner" id="banner" hidden></div>
       <div class="sheet" id="sheet" hidden>
@@ -92,7 +107,8 @@
           <h2>Controller</h2>
           <div class="opt"><span>Steering</span><div class="seg" id="optSteer"></div></div>
           <div class="opt"><span>Auto-gas</span><div class="seg" id="optGas"></div></div>
-          <div class="opt"><span>Vibration</span><div class="seg" id="optBuzz"></div></div>
+          <div class="opt"><span>Haptics</span><div class="seg" id="optBuzz"></div></div>
+          <p class="note" id="buzzNote" hidden></p>
           <button type="button" id="fsBtn">Fullscreen</button>
           <button type="button" id="pauseBtn">Pause the race</button>
           <button type="button" class="go" id="sheetClose">Back to racing</button>
@@ -125,6 +141,7 @@
     <script src="js/icons.js"></script>
     <script src="js/served.js"></script>
     <script src="js/net.js"></script>
+    <script src="js/buzz.js"></script>
     <script src="js/pad.js"></script>
   </body>
 </html>

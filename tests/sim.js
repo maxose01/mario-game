@@ -614,6 +614,179 @@ function run(race, secs, fn) {
 }
 
 // ---------------------------------------------------------------------------
+// Haptics: what a racer's phone is told to feel (js/haptics.js), from real driving.
+{
+  const HapticTracker = G('HapticTracker');
+  // run the race, feeding a tracker for kart k every step; collect its shots and rumble
+  const feel = (race, k, secs, fn) => {
+    const h = new HapticTracker(k);
+    const shots = [], rumble = [];
+    for (let i = 0; i < Math.round(secs * 60); i++) {
+      if (fn) fn(i / 60);
+      race.update(1 / 60);
+      h.update(race, race.drainEvents(), 1 / 60, false);
+      shots.push(...h.take());
+      rumble.push(Object.assign({}, h.rumble));
+    }
+    return { h, shots, rumble, named: (n) => shots.filter((s) => s[0] === n) };
+  };
+  const drive = (k, gas = true) => () => {
+    k.ctl.gas = gas;
+    k.ctl.steer = 0;
+  };
+  const Mt = getTrack('meadow'), mainS = Mt.startS + 20;
+
+  // braking at speed judders, harder the faster you go, and stops once the kart has stopped
+  let race = soloRace('meadow');
+  race.state = 'race';
+  let k = placeOn(race, mainS, 0, 26);
+  let f = feel(race, k, 2.5, () => {
+    k.ctl.gas = false;
+    k.ctl.brake = true;
+    k.ctl.steer = 0;
+  });
+  const early = f.rumble[5], late = f.rumble[f.rumble.length - 1];
+  check('braking at speed judders the phone, and stops once the kart has stopped', early.a > 0.5 && early.f === 17 && late.a === 0, `a ${early.a} at speed, ${late.a} stopped`);
+
+  // smooth tarmac is quiet; off the road it rumbles, coarse and irregular
+  race = soloRace('meadow');
+  race.state = 'race';
+  k = placeOn(race, mainS, 0, 24);
+  f = feel(race, k, 0.5, drive(k));
+  const tarmac = Math.max(...f.rumble.map((r) => r.a));
+  race = soloRace('meadow');
+  race.state = 'race';
+  const pM = Mt.main.point(mainS, 0), hwM = pM.hw, shM = Mt.main.sh[Mt.main.indexAt(mainS)];
+  k = placeOn(race, mainS, hwM + shM * 0.6, 24);
+  f = feel(race, k, 0.3, drive(k));
+  const off = f.rumble[f.rumble.length - 1];
+  check('tarmac is quiet, off the road the phone rumbles coarse and irregular', tarmac === 0 && off.a > 0.3 && off.j >= 0.5, `tarmac ${tarmac}, off-road a ${off.a} j ${off.j}`);
+
+  // the kerb buzzes once per red-and-white stripe
+  race = soloRace('meadow');
+  race.state = 'race';
+  k = placeOn(race, mainS, hwM + 0.4, 22);
+  f = feel(race, k, 0.2, drive(k));
+  const kerb = f.rumble[f.rumble.length - 1], want = Math.abs(k.vf) / 2.2;
+  check('kerbs buzz once per stripe at the kart\'s speed', kerb.a > 0.3 && Math.abs(kerb.f - want) <= 1.5 && kerb.j === 0, `${kerb.f} Hz at ${Math.abs(k.vf).toFixed(1)} u/s (want ${want.toFixed(1)})`);
+
+  // wooden planks rattle faster the faster you go; glassy ice is silent
+  const M = getTrack('mount');
+  const plankS = M.segS(25, 0.4), iceS = M.segS(8, 0.5);
+  race = soloRace('mount');
+  race.state = 'race';
+  k = placeOn(race, plankS, 0, 14);
+  const slow = feel(race, k, 0.2, drive(k, false)).rumble.pop();
+  race = soloRace('mount');
+  race.state = 'race';
+  k = placeOn(race, plankS, 0, 26);
+  const fast = feel(race, k, 0.2, drive(k, false)).rumble.pop();
+  race = soloRace('mount');
+  race.state = 'race';
+  k = placeOn(race, iceS, 0, 26);
+  const ice = feel(race, k, 0.4, drive(k)).rumble;
+  check('wooden planks rattle faster at speed, glassy ice is silent', slow.a > 0 && fast.f > slow.f + 4 && ice.every((r) => r.a === 0), `planks ${slow.f} -> ${fast.f} Hz, ice max ${Math.max(...ice.map((r) => r.a))}`);
+
+  // moguls kick the wheels
+  const hz = M.main.zones.find((z) => z.kind === 'hump' && z.d1 - z.d0 >= 20);
+  race = soloRace('mount');
+  race.state = 'race';
+  k = placeOn(race, hz.s0 - 12, 0, 16);
+  f = feel(race, k, 2.2, drive(k));
+  check('moguls kick the wheels', f.named('jolt').length >= 2, `${f.named('jolt').length} jolts`);
+
+  // a wall hit jolts by its impact speed; a gentle brush doesn't
+  const wallHit = (deg, speed) => {
+    const r = soloRace('meadow');
+    r.state = 'race';
+    const kk = placeOn(r, mainS, hwM - 2, 0);
+    kk.head += (deg * Math.PI) / 180;
+    kk.vx = Math.cos(kk.head) * speed;
+    kk.vz = Math.sin(kk.head) * speed;
+    return feel(r, kk, 0.6, () => {
+      kk.ctl.gas = true;
+      kk.ctl.steer = 0;
+    }).named('wall');
+  };
+  const hard = wallHit(45, 26), brush = wallHit(8, 10);
+  check('a wall hit jolts the phone by its impact speed, a gentle brush does not', hard.length >= 1 && hard[0][1] > 0.6 && brush.length === 0, `hard ${JSON.stringify(hard[0])}, brush ${brush.length}`);
+
+  // a kart bump reaches both karts' phones
+  const two = [{ name: 'A', bot: false, config: { character: 'pepper' } }, { name: 'B', bot: false, config: { character: 'mudlet' } }];
+  race = soloRace('meadow', null, two);
+  race.state = 'race';
+  const a = placeOn(race, mainS, -1.3, 0, race.karts[0]), b = placeOn(race, mainS, 1.3, 0, race.karts[1]);
+  a.vx += a.loc.nx * 7;
+  a.vz += a.loc.nz * 7;
+  b.vx -= b.loc.nx * 7;
+  b.vz -= b.loc.nz * 7;
+  const ha = new HapticTracker(a), hb = new HapticTracker(b);
+  let bumps = [0, 0];
+  for (let i = 0; i < 24; i++) {
+    race.update(1 / 60);
+    const ev = race.drainEvents();
+    ha.update(race, ev, 1 / 60, false);
+    hb.update(race, ev, 1 / 60, false);
+    bumps[0] += ha.take().filter((s) => s[0] === 'bump').length;
+    bumps[1] += hb.take().filter((s) => s[0] === 'bump').length;
+  }
+  check('a kart bump reaches both karts\' phones', bumps[0] > 0 && bumps[1] > 0, `bumps ${bumps.join('/')}`);
+
+  // revving on the grid: rough when it floods (too early), smooth in the rocket-start window
+  race = soloRace('meadow');
+  k = race.karts[0];
+  let h = new HapticTracker(k);
+  const revs = [];
+  for (let i = 0; i < 60 * 4 && race.state === 'countdown'; i++) {
+    k.ctl.gas = true;
+    race.update(1 / 60);
+    h.update(race, race.drainEvents(), 1 / 60, false);
+    if (race.state === 'countdown') revs.push(Object.assign({ count: race.count }, h.rumble));
+  }
+  race = soloRace('meadow');
+  k = race.karts[0];
+  h = new HapticTracker(k);
+  let sweet = null;
+  for (let i = 0; i < 60 * 4 && race.state === 'countdown'; i++) {
+    k.ctl.gas = race.count <= 1;
+    race.update(1 / 60);
+    h.update(race, race.drainEvents(), 1 / 60, false);
+    if (race.state === 'countdown' && k.ctl.gas) sweet = Object.assign({}, h.rumble);
+  }
+  const flooded = revs[revs.length - 1];
+  check('revving on the grid: rough when the engine floods, smooth in the rocket-start window', flooded.j >= 0.6 && sweet && sweet.j <= 0.1 && sweet.a > flooded.a, `flooded ${JSON.stringify(flooded)}, sweet spot ${JSON.stringify(sweet)}`);
+
+  // a stomper slamming down next to you thumps; across the course it doesn't; pausing is quiet
+  race = soloRace('meadow');
+  race.state = 'race';
+  k = placeOn(race, mainS, 0, 0);
+  h = new HapticTracker(k);
+  h.update(race, [{ type: 'stomp', kart: null, a: { x: k.x + 5, y: k.y, z: k.z } }, { type: 'stomp', kart: null, a: { x: k.x + 60, y: k.y, z: k.z } }], 1 / 60, false);
+  const thuds = h.take().filter((s) => s[0] === 'thud');
+  h.rumble.a = 0.5;
+  h.update(race, [], 1 / 60, true);
+  check('a stomper slamming down nearby thumps, far away it does not; pausing is quiet', thuds.length === 1 && thuds[0][1] > 0.6 && h.rumble.a === 0, JSON.stringify(thuds));
+
+  // every jolt the big screen can send has a pattern on the phone
+  const fxNames = new Set([...fs.readFileSync(path.join(__dirname, '..', 'js', 'buzz.js'), 'utf8').matchAll(/^ {2}(\w+): \[\d/gm)].map((m) => m[1]));
+  race = soloRace('meadow');
+  race.state = 'race';
+  k = race.karts[0];
+  h = new HapticTracker(k);
+  const near = { x: k.x + 2, y: k.y, z: k.z };
+  const all = ['count', 'go', 'squish', 'fall', 'glide', 'trick', 'rocket', 'stall', 'key', 'gate', 'ring', 'star', 'lap', 'finallap', 'section', 'finalsection', 'respawn', 'launch', 'spinboost', 'box', 'itemget', 'use', 'coin', 'coinloss', 'locked', 'bumper', 'squash']
+    .map((type) => ({ type, kart: k }))
+    .concat([{ type: 'wall', kart: k, a: 20 }, { type: 'land', kart: k, a: 15 }, { type: 'sparks', kart: k, a: 3 }, { type: 'hit', kart: k, a: 'banana' }, { type: 'hit', kart: k, a: 'shell' }, { type: 'bump', kart: k, a: race.karts[0], b: 8 }])
+    .concat(Object.keys(G('HAPTIC_BOOSTS')).map((a2) => ({ type: 'boost', kart: k, a: a2 })))
+    .concat(['stomp', 'blast'].map((type) => ({ type, kart: null, a: near })))
+    .concat([{ type: 'finish', kart: k, a: 1 }]);
+  h.update(race, all, 1 / 60, false);
+  const sent = new Set(h.take().map((s) => s[0]).concat(['jolt']));
+  const missing = [...sent].filter((n) => !fxNames.has(n));
+  check('every jolt the big screen sends has a vibration pattern on the phone', missing.length === 0 && sent.size >= 30, missing.length ? 'missing ' + missing.join(', ') : `${sent.size} kinds`);
+}
+
+// ---------------------------------------------------------------------------
 // The big screen loads every script as a classic script into one global scope: two files
 // declaring the same top-level const/let/class name would stop the game from loading.
 {

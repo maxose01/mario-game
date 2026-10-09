@@ -24,7 +24,7 @@ const P = {
   held: { left: false, right: false, drift: false, brake: false, gas: false },
   itemCount: 0,
   back: false,
-  opts: { steer: 'drag', autoGas: true, buzz: true },
+  opts: { steer: 'drag', autoGas: true, haptics: 'full' },
 };
 const $ = (id) => document.getElementById(id);
 function el(tag, cls, text) {
@@ -42,7 +42,14 @@ function boot() {
     P.id = Math.random().toString(36).slice(2, 12);
     Store.set('claykart.pad.id', P.id);
   }
-  Object.assign(P.opts, Store.get('claykart.pad.opts', {}));
+  const opts = Store.get('claykart.pad.opts', {});
+  Object.assign(P.opts, opts);
+  // older controllers saved an on/off vibration switch
+  if (typeof P.opts.buzz === 'boolean') {
+    if (!opts.haptics) P.opts.haptics = P.opts.buzz ? 'full' : 'off';
+    delete P.opts.buzz;
+  }
+  Buzz.init(P.opts.haptics);
   const saved = Store.get('claykart.pad.profile', {});
   P.name = saved.name || '';
   if (saved.config) P.config = sanitizeKart(saved.config);
@@ -139,6 +146,7 @@ function onMessage(m) {
         if (P.ready) send({ t: 'ready', v: true });
       } else P.config = sanitizeKart(m.config);
       document.documentElement.style.setProperty('--slot', m.color);
+      markSlot();
       renderLobby();
       break;
     case 'state':
@@ -153,6 +161,7 @@ function onMessage(m) {
       P.tracks = m.tracks || [];
       P.players = m.players || [];
       document.documentElement.style.setProperty('--slot', m.color);
+      markSlot();
       Store.set('claykart.pad.profile', { name: P.name, config: P.config, room: m.code || $('code').value });
       // joined while a race is already running? wait in the garage for the next one
       if (m.phase === 'race' && m.racing !== false) show('race');
@@ -170,8 +179,14 @@ function onMessage(m) {
     case 'hud':
       renderHud(m);
       break;
+    case 'hx':
+      // jolts: [[name, strength], ...]
+      if (Array.isArray(m.e)) for (const [name, s] of m.e) Buzz.play(name, s);
+      break;
+    case 'hr':
+      Buzz.rumble(m.a, m.f, m.j);
+      break;
     case 'fx':
-      if (P.opts.buzz && navigator.vibrate) navigator.vibrate(m.v);
       if (m.k === 'finallap') banner('FINAL LAP!');
       if (m.k === 'section') banner(`Section ${m.n}` + (m.name ? '\n' + m.name : ''), 2);
       if (m.k === 'finalsection') banner('FINAL SECTION!' + (m.name ? '\n' + m.name : ''), 2.2);
@@ -182,10 +197,12 @@ function onMessage(m) {
       if (m.err) toast(m.err);
       break;
     case 'results':
+      Buzz.stop();
       renderResults(m);
       show('results');
       break;
     case 'paused':
+      if (m.v) Buzz.stop();
       banner(m.v ? 'Paused' : 'Go!');
       break;
     case 'full':
@@ -199,6 +216,12 @@ function onMessage(m) {
       P.ping = performance.now() - m.c;
       break;
   }
+}
+
+// The player lights on the controller's rail: the one for your seat is lit.
+function markSlot() {
+  const leds = document.querySelectorAll('.joy-r .rail b');
+  leds.forEach((b, i) => b.classList.toggle('on', i === P.slot));
 }
 
 // ---------- lobby / garage ----------
@@ -218,7 +241,7 @@ function buildLobby() {
     P.ready = !P.ready;
     send({ t: 'ready', v: P.ready });
     renderLobby();
-    if (navigator.vibrate && P.opts.buzz) navigator.vibrate(20);
+    Buzz.play('ready');
   });
   const seg = (id, opts, act) => {
     for (const [label, v] of opts) {
@@ -374,7 +397,11 @@ function buildRace() {
   steer.addEventListener('pointermove', (e) => {
     if (e.pointerId !== pid) return;
     const w = Math.max(80, steer.clientWidth * 0.28);
+    const was = P.dragSteer;
     P.dragSteer = U.clamp((e.clientX - x0) / w, -1, 1);
+    // the wheel clicks through the centre and knocks at full lock
+    if (Math.abs(P.dragSteer) >= 1 && Math.abs(was) < 1) Buzz.click(12);
+    else if ((was < 0 && P.dragSteer >= 0) || (was > 0 && P.dragSteer <= 0)) Buzz.click(5);
     // recentre the anchor when dragging past full lock, so reversing is instant
     if (Math.abs(e.clientX - x0) > w) x0 = e.clientX - Math.sign(e.clientX - x0) * w;
   });
@@ -394,12 +421,19 @@ function buildRace() {
       b.setPointerCapture(e.pointerId);
       b.classList.add('down');
       y0 = e.clientY;
+      Buzz.click();
       if (act === 'item') {
         P.back = false;
         return;
       }
+      if (act === 'back') {
+        // Y: use the item, thrown backwards
+        P.back = true;
+        P.itemCount++;
+        sendInput();
+        return;
+      }
       P.held[act] = true;
-      if (P.opts.buzz && navigator.vibrate) navigator.vibrate(8);
       sendInput();
     });
     b.addEventListener('pointermove', (e) => {
@@ -412,6 +446,11 @@ function buildRace() {
         P.itemCount++;
         sendInput();
         P.back = false;
+        return;
+      }
+      if (act === 'back') {
+        P.back = false;
+        sendInput();
         return;
       }
       P.held[act] = false;
@@ -431,14 +470,26 @@ function buildRace() {
         P.opts[key] = v;
         Store.set('claykart.pad.opts', P.opts);
         applyOpts();
+        // feel the new strength straight away
+        if (key === 'haptics') {
+          Buzz.setLevel(v);
+          Buzz.play('sample');
+        }
       });
       $(id).appendChild(b);
     }
   };
   seg('optSteer', [['Drag', 'drag'], ['Tilt', 'tilt'], ['Buttons', 'buttons']], 'steer');
   seg('optGas', [['On', true], ['Off', false]], 'autoGas');
-  seg('optBuzz', [['On', true], ['Off', false]], 'buzz');
-  $('menuBtn').addEventListener('click', () => ($('sheet').hidden = false));
+  seg('optBuzz', [['Off', 'off'], ['Light', 'light'], ['Strong', 'full']], 'haptics');
+  $('menuBtn').addEventListener('click', () => {
+    Buzz.click();
+    $('sheet').hidden = false;
+  });
+  $('plusBtn').addEventListener('click', () => {
+    Buzz.click();
+    send({ t: 'pause' });
+  });
   $('sheetClose').addEventListener('click', () => ($('sheet').hidden = true));
   $('fsBtn').addEventListener('click', goFullscreen);
   $('pauseBtn').addEventListener('click', () => {
@@ -459,11 +510,15 @@ function applyOpts() {
   $('arrows').hidden = o.steer !== 'buttons';
   $('wheel').hidden = o.steer === 'buttons';
   $('steerHint').textContent = o.steer === 'tilt' ? 'Tilt your phone like a steering wheel' : o.steer === 'drag' ? 'Drag left and right to steer' : '';
+  // Y throws your item backwards, or is the gas pedal when auto-gas is off
   $('v-race').querySelector('.b-gas').hidden = o.autoGas;
-  $('v-race').querySelector('.btns').classList.toggle('with-gas', !o.autoGas);
-  for (const [id, key] of [['optSteer', 'steer'], ['optGas', 'autoGas'], ['optBuzz', 'buzz']]) {
+  $('v-race').querySelector('.b-back').hidden = !o.autoGas;
+  for (const [id, key] of [['optSteer', 'steer'], ['optGas', 'autoGas'], ['optBuzz', 'haptics']]) {
     for (const b of $(id).children) b.classList.toggle('on', b.dataset.v === String(o[key]));
   }
+  const sup = Buzz.support;
+  $('buzzNote').hidden = sup === 'full';
+  $('buzzNote').textContent = sup === 'taps' ? 'iPhones have no vibration motor control for web pages: you feel single taps for the big moments (where iOS allows them), but no rumble.' : 'This browser cannot vibrate the phone.';
   const tiltBtn = $('optSteer').children[1];
   tiltBtn.disabled = !window.DeviceOrientationEvent || !window.isSecureContext;
   if (tiltBtn.disabled) tiltBtn.title = 'Tilt steering needs an https page (online mode)';
@@ -579,7 +634,6 @@ function renderResults(m) {
   }
   $('rLead').hidden = !P.leader;
   $('rWait').hidden = P.leader;
-  if (navigator.vibrate && P.opts.buzz) navigator.vibrate(m.place === 1 ? [80, 40, 80, 40, 200] : [60]);
 }
 
 // ---------- phone niceties ----------

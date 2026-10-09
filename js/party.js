@@ -144,6 +144,8 @@ const Party = {
         const n = Number(m.i) || 0;
         if (n !== p.itemSeen) {
           c.itemQueued = true;
+          // thrown backwards? (remembered with the press: the release may follow at once)
+          c.itemBack = !!m.k;
           p.itemSeen = n;
         }
         p.lastInput = performance.now();
@@ -242,7 +244,9 @@ const Party = {
         p.ctl.autoGas = p.autoGas;
       } else if (p.ctl.itemQueued) {
         p.ctl.item = true;
+        p.ctl.back = p.ctl.back || p.ctl.itemBack;
         p.ctl.itemQueued = false;
+        p.ctl.itemBack = false;
       } else p.ctl.item = false;
     }
   },
@@ -292,19 +296,14 @@ const Party = {
       });
     }
   },
-  // Buzz the right phone when something happens to its kart.
+  // Tell the right phone about the moments it shows a banner for (the haptics have their own
+  // channel, below).
   raceEvent(e) {
     if (!this.link || !e.kart || e.kart.slot < 0) return;
+    if (!['finallap', 'section', 'finalsection', 'key', 'gate'].includes(e.type)) return;
     const p = this.players[e.kart.slot];
     if (!p || p.kind !== 'phone' || !p.connected) return;
-    const buzz = {
-      hit: [80, 40, 120], squish: [200], fall: [60, 60, 60], boost: [25], itemget: [15], coin: [8], lap: [40, 30, 40], finallap: [60, 40, 60, 40, 60],
-      finish: [100, 50, 200], key: [30, 30, 30], gate: [50, 30, 90], wall: [20], bump: [15], sparks: [10], go: [60],
-      ring: [20, 30, 45], glide: [30, 40, 90], spinboost: [15, 20, 25], bumper: [35], section: [40, 40, 40, 40, 120], finalsection: [60, 40, 60, 40, 60, 40, 160],
-    }[e.type];
-    // pads buzz every frame you sit on them; rings and spins have their own patterns
-    if (!buzz || (e.type === 'boost' && (e.a === 'pad' || e.a === 'ring' || e.a === 'spin'))) return;
-    const msg = { t: 'fx', k: e.type, v: buzz };
+    const msg = { t: 'fx', k: e.type };
     if (e.type === 'section' || e.type === 'finalsection') {
       const sec = App.race && App.race.sections ? App.race.sections[e.a - 1] : null;
       msg.n = e.a;
@@ -312,13 +311,41 @@ const Party = {
     }
     this.link.send(p.pid, msg);
   },
+  // What each phone's racer should feel this frame (see js/haptics.js): the jolts as they
+  // happen, and the continuous rumble whenever it changes (at most 20 times a second), with a
+  // keep-alive every 0.3 s so a phone that stops hearing from us goes quiet by itself.
+  sendHaptics(race, dt, events, frozen) {
+    if (!this.link) return;
+    for (const p of this.list()) {
+      if (p.kind !== 'phone' || !p.connected || p.kartIdx === undefined) continue;
+      const k = race.karts[p.kartIdx];
+      if (!k) continue;
+      if (!p.haptics || p.haptics.k !== k) {
+        p.haptics = new HapticTracker(k);
+        p.hapSent = { a: 0, f: 0, j: 0, t: 0 };
+      }
+      const h = p.haptics, last = p.hapSent;
+      h.update(race, events, dt, frozen);
+      const shots = h.take();
+      if (shots.length) this.link.send(p.pid, { t: 'hx', e: shots });
+      const r = h.rumble;
+      last.t += dt;
+      const started = (r.a > 0) !== (last.a > 0);
+      const changed = Math.abs(r.a - last.a) >= 0.04 || Math.abs(r.f - last.f) >= 2 || r.j !== last.j;
+      if (started || (changed && last.t >= 0.05) || (r.a > 0 && last.t >= 0.3)) {
+        this.link.send(p.pid, { t: 'hr', a: r.a, f: r.f, j: r.j });
+        Object.assign(last, r);
+        last.t = 0;
+      }
+    }
+  },
   broadcast(msg) {
     if (this.link) this.link.broadcast(msg);
   },
 };
 
 function blankCtl() {
-  return { steer: 0, gas: false, brake: false, drift: false, item: false, back: false, itemQueued: false, autoGas: false };
+  return { steer: 0, gas: false, brake: false, drift: false, item: false, back: false, itemQueued: false, itemBack: false, autoGas: false };
 }
 function cleanName(n) {
   return String(n || '').replace(/[^\p{L}\p{N} _.\-!?']/gu, '').trim().slice(0, 12);

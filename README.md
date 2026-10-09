@@ -24,8 +24,10 @@ npm start            # or: node server.js   (no install needed, Node 18+)
 4. On the phone: pick a racer, kart, wheels and paint (buy more with the party's coins), then
    tap **I'm ready!**. The first player is the race leader and can choose the course, laps,
    engine class, bots and items from their phone; the big screen has the same controls.
-   During the race the phone shows your place, lap (or section), coins and item, and buzzes
-   for hits, boosts, rings, gliders and checkpoints.
+   During the race the phone turns into a handheld console tinted in your player colour: the
+   steering wheel on the left half, the A B X Y buttons on the right, and a little screen in
+   the middle with your place, item, lap (or section), coins and key. It vibrates with what
+   your kart feels (see **Haptics** below).
 
 The server is a single dependency-free file (`server.js`): it serves the game and relays
 messages between the big screen and the phones over WebSockets. If a phone drops out mid-race a
@@ -60,17 +62,46 @@ Switch **Bots** off when racing alone and you race the **Staff Ghost** instead.
 
 | Action | Keyboard (solo) | Two on one keyboard | Gamepad | Phone |
 | --- | --- | --- | --- | --- |
-| Steer | ← → or A D | A D / ← → | Left stick, d-pad | Drag (or tilt, or ◀ ▶ buttons) |
-| Gas | ↑ or W | W / ↑ | A or RT | Automatic (can be switched off) |
-| Brake / reverse | ↓ or S | S / ↓ | B or LT | Brake button |
-| Hop & drift (hold) | Space, Shift or Z | Left Shift / Right Shift or / | RB or LB | Drift button |
-| Use item | X, E or Q | Q / . | X | Item button |
-| Throw backwards / look back | hold C or R | R / , | Y | Swipe down on Item |
-| Pause | Esc or P | | Start | ⚙ → Pause |
+| Steer | ← → or A D | A D / ← → | Left stick, d-pad | Drag the wheel (or tilt, or ◀ ▶ buttons) |
+| Gas | ↑ or W | W / ↑ | A or RT | Automatic (switch it off and Y is the gas) |
+| Brake / reverse | ↓ or S | S / ↓ | B or LT | B |
+| Hop & drift (hold) | Space, Shift or Z | Left Shift / Right Shift or / | RB or LB | A |
+| Use item | X, E or Q | Q / . | X | X |
+| Throw backwards / look back | hold C or R | R / , | Y | Y, or swipe down on X |
+| Pause | Esc or P | | Start | + (− opens the controller settings) |
 | Edit Panel | Tab or ` | | | |
 | Mute / fullscreen | M / F | | | |
 
 Menus work with a mouse, touch, arrow keys + Enter (TV remotes) or a gamepad's d-pad.
+
+### Haptics
+
+The phones feel the race. Every frame the big screen works out what each phone's kart is going
+through (`js/haptics.js`) and streams it over: one-shot jolts with a strength, and one
+continuous rumble. The phone plays them on its vibration motor (`js/buzz.js`).
+
+- **Hits**: a wall hit by its impact speed, bumping another kart (both phones), bumpers, cows
+  and poles, a locked gate, shells and bombs (a crash), bananas, penguins and skiers (a slippery
+  wobble), being squashed by a stomper, falling off and the rescue cloud.
+- **The road**: kerbs buzz once per red-and-white stripe at your speed, off-road gravel rumbles
+  coarse and irregular, wooden planks rattle faster the faster you go, cobbles, dirt, snow and
+  water each have their own texture, moguls and ramp bases kick the wheels, and landings thud
+  by how far you fell. Glassy ice, smooth tarmac, anti-gravity hover and the air are quiet, so
+  you feel when the grip goes.
+- **Driving**: braking judders (harder the faster you go, gone once you have stopped), drifting
+  scrubs, mini-turbo sparks tick blue, orange and purple, boosts surge and roar, a star beats,
+  and a spin-out wobbles until you recover. On the grid you feel the engine rev: rough when it
+  floods, smooth in the rocket-start window.
+- **Around you**: a stomper slamming down or a bomb going off next to you, the countdown,
+  checkpoints, laps and the finish. Key presses click, and the drag wheel clicks through its
+  centre and knocks at full lock.
+
+A vibration motor has no volume knob, so strength becomes pulse length and a rumble becomes a
+train of pulses whose duty cycle is its amplitude. **Haptics** (Off, Light, Strong) is in the
+controller settings (the − button). Android phones get all of it. iPhones don't let web pages
+drive the vibration motor; the controller falls back to the tap that Safari's switch control
+makes, so an iPhone feels single taps for key presses and the bigger moments where iOS allows
+it, but no rumble.
 
 ## What's in it
 
@@ -167,7 +198,7 @@ pad.html            phone controller
 server.js           zero-dependency static server + WebSocket room relay
 js/served.js        "is the party server here?" flag (rewritten by server.js)
 css/style.css       big-screen look (shared with Super Clay Isles)
-css/pad.css         phone controller look
+css/pad.css         phone controller look (the handheld console)
 vendor/             three.js r159, qrcode-generator, PeerJS (all MIT)
 js/config.js        every tweakable parameter (drives the Edit Panel), presets, engine classes
 js/parts.js         racers, karts, wheels, paints, stats and prices
@@ -182,6 +213,7 @@ js/items.js         item boxes, shells, bananas, bombs, coins, keys, gates, boos
 js/ai.js            bot drivers (pure)
 js/race.js          grid, countdown, laps or sections, positions, bumping, rubber-banding, the
                     cargo-plane intro, staff ghosts (pure)
+js/haptics.js       what each phone's racer feels: jolts and the continuous rumble (pure)
 js/clay3d.js        clay materials (boil, rim shading, fingerprints) and lumpy geometry kit
 js/world3d.js       builds a course in 3D: terrain, roads, walls, water and lava, scenery
 js/sky3d.js         lights and sun shadows, sky, clouds and distant backdrops
@@ -200,6 +232,7 @@ js/input.js         keyboard, gamepad and touch input, menu navigation
 js/editpanel.js     Edit Panel
 js/main.js          app flow, race sounds and section music, the fixed-timestep loop
 js/pad.js           phone controller logic
+js/buzz.js          the phone's haptics engine (vibration patterns, iPhone taps)
 tests/sim.js        headless race and mechanics tests (Node)
 tests/load.js       loads the pure simulation scripts into Node
 tests/e2e.mjs       the party flow in Chromium with emulated phones
@@ -227,13 +260,18 @@ npm run test:e2e     # big screen + two phones in Chromium (needs Playwright)
   point-to-point run the sections must come in order, every bot must glide both chasms and
   fly through the rings, and some must take each side of the fork. Mechanics checks cover the
   glider, boost rings, anti-gravity spin boosts, currents, banking, the road-end barriers,
-  moguls, rescue spots, the cargo-plane intro, the staff ghost and every hazard kind.
+  moguls, rescue spots, the cargo-plane intro, the staff ghost and every hazard kind, and the
+  haptics: brake judder, quiet tarmac and ice against off-road, kerbs and planks, moguls, wall
+  hits by impact, bumps on both phones, the revving engine, nearby stompers, and a vibration
+  pattern on the phone for every jolt the big screen can send.
 - `tests/e2e.mjs` starts the server, opens the big screen and two emulated phones, joins the
   room from the QR link, customises and buys parts, readies up, starts from the leader's phone,
   steers with phone input, checks split screen, finishes the race and checks the results, the
   coin bank, the garage and the Edit Panel. Then it picks Mount Wobble from the leader's phone
   (all four courses listed, laps disabled), starts the run and checks the phone's HUD counts
-  the sections and the music follows them.
+  the sections and the music follows them. On the phone it also checks the Y button throws the
+  item backwards, key presses click, a wall hit jolts and braking judders the vibration motor,
+  and Haptics Off keeps it still.
 - `tests/shots.mjs` photographs a course for eyeballing scenery, hazards and effects:
 
   ```sh

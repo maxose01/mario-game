@@ -366,6 +366,7 @@ const App = {
       this.raceEvents(events);
       this.view.update(frozen ? 0 : dt * CFG.timeScale, events);
       Party.sendRaceHud(this.race, dt);
+      Party.sendHaptics(this.race, dt, events, frozen);
       this.engineSounds(frozen, dt);
       if (this.race.state === 'done') {
         this.raceDoneT += dt;

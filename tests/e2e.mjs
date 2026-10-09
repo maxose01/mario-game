@@ -101,6 +101,11 @@ try {
   const phones = [];
   for (const name of ['Ana', 'Bo']) {
     const ctx = await browser.newContext({ ...devices['Pixel 7'] });
+    // record what the controller asks the vibration motor to do
+    await ctx.addInitScript(() => {
+      window.__vib = [];
+      Object.defineProperty(Navigator.prototype, 'vibrate', { configurable: true, value: (p) => (window.__vib.push(p), true) });
+    });
     const ph = await ctx.newPage();
     watch(ph, 'phone ' + name);
     await ph.goto(joinUrl);
@@ -201,6 +206,52 @@ try {
   await ana.click('.b-item');
   await host.waitForFunction(() => App.race.karts[Party.players[0].kartIdx].item === null, null, { timeout: 5000 }).catch(() => {});
   check('Item button fires the item', await host.evaluate(() => App.race.karts[Party.players[0].kartIdx].item === null));
+  // Y throws the item backwards
+  await host.evaluate(() => {
+    const k = App.race.karts[Party.players[0].kartIdx];
+    k.item = 'green';
+    k.itemN = 1;
+    k.itemCooldown = 0;
+  });
+  await ana.click('.b-back');
+  await host.waitForFunction(() => App.race.karts[Party.players[0].kartIdx].item === null, null, { timeout: 5000 }).catch(() => {});
+  const thrown = await host.evaluate(() => {
+    const k = App.race.karts[Party.players[0].kartIdx];
+    const o = App.race.items.objects.filter((q) => q.kind === 'shell' && q.owner === k).pop();
+    return o ? o.vx * Math.cos(k.head) + o.vz * Math.sin(k.head) : null;
+  });
+  check('Y throws the item backwards', thrown !== null && thrown < 0, `shell speed along the kart ${thrown}`);
+
+  // ---- haptics ----
+  const vibs = () => ana.evaluate(() => window.__vib.splice(0));
+  await vibs();
+  await ana.click('.b-brake');
+  check('a key press clicks the vibration motor', (await vibs()).some((p) => Array.isArray(p) && p.length === 1 && p[0] <= 10));
+  await host.evaluate(() => App.race.emit('wall', App.race.karts[Party.players[0].kartIdx], 20));
+  await ana.waitForFunction(() => window.__vib.some((p) => Array.isArray(p) && p[0] === 68), null, { timeout: 4000 }).catch(() => {});
+  const wallBuzz = await vibs();
+  check('a hard wall hit jolts the phone (68 ms, then a rebound)', wallBuzz.some((p) => Array.isArray(p) && p[0] === 68 && p.length === 3), JSON.stringify(wallBuzz.slice(-3)));
+  // hold Brake at speed: the phone judders with a pulse train until the kart has slowed down
+  const bb = await ana.locator('.b-brake').boundingBox();
+  await ana.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2);
+  await ana.mouse.down();
+  await host.evaluate(() => {
+    const k = App.race.karts[Party.players[0].kartIdx];
+    k.vx = Math.cos(k.head) * 26;
+    k.vz = Math.sin(k.head) * 26;
+  });
+  await ana.waitForFunction(() => window.__vib.some((p) => Array.isArray(p) && p.length >= 6), null, { timeout: 4000 }).catch(() => {});
+  await ana.mouse.up();
+  const judder = (await vibs()).find((p) => Array.isArray(p) && p.length >= 6);
+  check('braking at speed judders the phone with a pulse train', !!judder, JSON.stringify(judder || []).slice(0, 80));
+  // haptics off: the motor stays still
+  await ana.evaluate(() => Buzz.setLevel('off'));
+  await vibs();
+  await host.evaluate(() => App.race.emit('wall', App.race.karts[Party.players[0].kartIdx], 20));
+  await ana.waitForTimeout(500);
+  const silent = (await vibs()).filter((p) => p !== 0 && !(Array.isArray(p) && p.length === 1 && p[0] === 0));
+  check('with haptics off the phone stays still', silent.length === 0, JSON.stringify(silent));
+  await ana.evaluate(() => Buzz.setLevel('full'));
   await host.waitForFunction(() => {
     const t = document.getElementById('hLap');
     return true;

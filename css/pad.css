@@ -347,76 +347,143 @@ input {
   background: #7ddc6f;
 }
 
-/* ---- race controller ---- */
+/* ---- race controller: a handheld console ----
+   A controller half on each side of a little screen, tinted in the player's colour: the left
+   half holds the steering wheel, the right half the A B X Y buttons in a diamond, with minus
+   and plus and the player lights on the rail. */
 #v-race {
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
-  gap: 8px;
+  padding: max(4px, env(safe-area-inset-top)) max(4px, env(safe-area-inset-right)) max(4px, env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left));
+  gap: 0;
   user-select: none;
   -webkit-user-select: none;
   touch-action: none;
+  --shell: var(--slot);
+  --shell-hi: color-mix(in srgb, var(--slot) 62%, #ffffff);
+  --shell-lo: color-mix(in srgb, var(--slot) 72%, #000000);
+  --key: #2c2a31;
+  --key-hi: #4b4853;
+  --key-lo: #1a191e;
+  --key-ink: #e4e1ea;
+  --key-sub: #aba7b6;
+  --bezel: #17141c;
 }
-.hudbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: rgba(70, 42, 90, 0.6);
-  border-radius: 16px;
-  padding: 6px 10px;
-  border-bottom: 4px solid var(--slot);
-}
-.place {
-  font: 700 32px/1 var(--font-display);
-  color: var(--gold);
-  text-shadow: 0 2px 0 #8a4a1a;
-  min-width: 2.2em;
-}
-.lap {
-  font: 600 16px var(--font-display);
-}
-.coins {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font: 700 18px var(--font-display);
-}
-.keyi {
-  font-size: 22px;
-}
-.item {
-  margin-left: auto;
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  border: 3px solid rgba(255, 248, 236, 0.85);
-  display: grid;
-  place-items: center;
-}
-.mini {
-  padding: 8px 10px;
-  font-size: 18px;
-}
-.pad {
+.console {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 1fr);
+  grid-template-areas: 'l screen r';
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.35));
 }
+.joy {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  background: var(--shell);
+  background: linear-gradient(165deg, var(--shell-hi) 0%, var(--shell) 34%, var(--shell) 66%, var(--shell-lo) 100%);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.35), inset 0 -8px 14px rgba(0, 0, 0, 0.16);
+}
+.joy-l {
+  grid-area: l;
+  border-radius: 56px 0 0 56px;
+  padding: 44px 22px 16px 16px;
+  display: grid;
+}
+.joy-r {
+  grid-area: r;
+  border-radius: 0 56px 56px 0;
+  padding: 44px 16px 16px 24px;
+  display: grid;
+  place-items: center;
+  /* the buttons size themselves to this half */
+  container-type: size;
+}
+/* the rail where each half slides onto the console, with the player lights on the right one */
+.rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 9px;
+  background: linear-gradient(90deg, #26232b, #3a3640 50%, #26232b);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 7px;
+  align-items: center;
+}
+.joy-l .rail {
+  right: 0;
+}
+.joy-r .rail {
+  left: 0;
+}
+.rail b {
+  width: 4px;
+  height: 11px;
+  border-radius: 2px;
+  background: #4a4651;
+}
+.rail b.on {
+  background: #7dff9a;
+  box-shadow: 0 0 6px #7dff9a, 0 0 12px rgba(125, 255, 154, 0.6);
+}
+/* minus and plus */
+.sys {
+  position: absolute;
+  top: 12px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, var(--key-hi), var(--key) 60%, var(--key-lo));
+  box-shadow: 0 2px 0 var(--key-lo), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  display: grid;
+  place-items: center;
+}
+.sys i,
+.sys.plus i::after {
+  display: block;
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--key-ink);
+}
+.sys.plus i {
+  position: relative;
+}
+.sys.plus i::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: rotate(90deg);
+}
+.sys:active {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 var(--key-lo), inset 0 2px 3px rgba(0, 0, 0, 0.45);
+}
+.minus {
+  right: 22px;
+}
+.plus {
+  left: 22px;
+}
+/* the steering pad: a recessed well under the wheel */
 .steer {
   position: relative;
-  border-radius: 24px;
-  background: rgba(246, 231, 210, 0.08);
-  border: 2px dashed rgba(246, 231, 210, 0.3);
+  min-height: 0;
+  border-radius: 30px;
+  background: radial-gradient(ellipse at 50% 40%, rgba(43, 24, 56, 0.34), rgba(20, 12, 28, 0.5));
+  box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.35), inset 0 -1px 0 rgba(255, 255, 255, 0.25);
   display: grid;
   place-items: center;
   overflow: hidden;
   touch-action: none;
 }
 .wheel {
-  width: min(42vw, 42vh, 220px);
+  width: min(34vw, 50vh, 210px);
   aspect-ratio: 1;
   border-radius: 50%;
   border: 18px solid var(--slot);
@@ -448,75 +515,227 @@ input {
 .steer-hint {
   position: absolute;
   bottom: 8px;
+  left: 8px;
+  right: 8px;
   margin: 0;
-  font-size: 13px;
-  color: rgba(255, 246, 234, 0.7);
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 246, 234, 0.75);
 }
+/* arrow-button steering: two round direction keys */
 .arrows {
   position: absolute;
   inset: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
   padding: 8px;
 }
-.arrows button {
-  border-radius: 20px;
-  font-size: 40px;
-  background: rgba(246, 231, 210, 0.85);
-}
-.arrows button.down,
-.btns button.down {
-  transform: scale(0.95);
-  filter: brightness(1.15);
-}
-.btns {
+/* the screen between the halves: place, item, lap or section, coins, key */
+.screen {
+  grid-area: screen;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bezel);
+  padding: 12px 10px;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 2fr 1fr;
-  gap: 10px;
+  grid-template-rows: 1fr auto auto;
+  justify-items: center;
+  align-items: center;
+  gap: 6px;
 }
-.btns button {
-  border-radius: 24px;
-  font: 700 26px/1 var(--font-display);
+.screen::before {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  border-radius: 10px;
+  background: radial-gradient(ellipse at 50% 0%, var(--plum-3) 0%, var(--plum) 75%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+.screen > * {
+  position: relative;
+}
+.place {
+  font: 700 clamp(36px, 14vh, 64px)/1 var(--font-display);
+  color: var(--gold);
+  text-shadow: 0 3px 0 #8a4a1a, 0 5px 0 rgba(0, 0, 0, 0.25);
+}
+.item {
+  width: clamp(44px, 16vh, 64px);
+  aspect-ratio: 1;
+  border-radius: 14px;
+  border: 3px solid rgba(255, 248, 236, 0.85);
+  background: rgba(0, 0, 0, 0.18);
+  display: grid;
+  place-items: center;
+  font: 700 28px var(--font-display);
+}
+.item canvas {
+  max-width: 85%;
+  height: auto;
+}
+.screen-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 4px 12px;
+}
+.lap {
+  font: 600 15px var(--font-display);
+  white-space: nowrap;
+}
+.coins {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font: 700 17px var(--font-display);
+}
+.keyi {
+  font-size: 18px;
+}
+/* A B X Y in a diamond, as big as the half allows (room left for the drift glow) */
+.abxy {
+  --fb: clamp(46px, min(28cqw, 29cqh), 96px);
+  display: grid;
+  grid-template-columns: repeat(3, var(--fb));
+  grid-template-rows: repeat(3, var(--fb));
+  grid-template-areas: '. x .' 'y . a' '. b .';
+}
+.fx {
+  grid-area: x;
+}
+.fy {
+  grid-area: y;
+}
+.fa {
+  grid-area: a;
+}
+.fb {
+  grid-area: b;
+}
+.face,
+.dpad {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 32%, var(--key-hi) 0%, var(--key) 58%, var(--key-lo) 100%);
+  box-shadow: 0 5px 0 var(--key-lo), 0 7px 12px rgba(0, 0, 0, 0.35), inset 0 2px 1px rgba(255, 255, 255, 0.13), inset 0 -3px 5px rgba(0, 0, 0, 0.35);
+  color: var(--key-ink);
   display: grid;
   place-content: center;
-  gap: 4px;
+  justify-items: center;
+  gap: 1px;
   touch-action: none;
+  transition: transform 45ms ease-out, box-shadow 45ms ease-out;
 }
-.btns small {
-  font: 700 11px/1.1 var(--font-body);
-  opacity: 0.7;
+.face b {
+  font: 700 calc(var(--fb) * 0.4)/1 var(--font-display);
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.6);
 }
-.b-item {
-  background: var(--gold);
+.face small {
+  font: 800 calc(var(--fb) * 0.135)/1 var(--font-body);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--key-sub);
 }
-.b-drift {
-  background: var(--pink);
+.face.down,
+.dpad.down {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 var(--key-lo), 0 2px 4px rgba(0, 0, 0, 0.3), inset 0 3px 6px rgba(0, 0, 0, 0.55);
+  color: #ffffff;
 }
-.b-brake {
-  grid-column: 1 / span 2;
-  font-size: 18px !important;
+.face.down small {
+  color: var(--key-ink);
 }
-.btns.with-gas .b-brake {
-  grid-column: 1;
-}
-.b-gas {
-  background: #7ddc6f;
-}
+/* drift sparks light the ring around A */
 .b-drift.lvl1 {
-  box-shadow: 0 0 0 4px #58b4ff, inset 0 -3px 0 rgba(59, 36, 64, 0.22);
+  box-shadow: 0 5px 0 var(--key-lo), 0 0 0 4px #58b4ff, 0 0 18px #58b4ff, inset 0 2px 1px rgba(255, 255, 255, 0.13);
 }
 .b-drift.lvl2 {
-  box-shadow: 0 0 0 4px #ff9a3c, inset 0 -3px 0 rgba(59, 36, 64, 0.22);
+  box-shadow: 0 5px 0 var(--key-lo), 0 0 0 4px #ff9a3c, 0 0 18px #ff9a3c, inset 0 2px 1px rgba(255, 255, 255, 0.13);
 }
 .b-drift.lvl3 {
-  box-shadow: 0 0 0 4px #c77dff, inset 0 -3px 0 rgba(59, 36, 64, 0.22);
+  box-shadow: 0 5px 0 var(--key-lo), 0 0 0 4px #c77dff, 0 0 22px #c77dff, inset 0 2px 1px rgba(255, 255, 255, 0.13);
+}
+.dpad {
+  width: min(32%, 104px);
+  height: auto;
+  aspect-ratio: 1;
+}
+.dpad i {
+  width: 0;
+  height: 0;
+  border-top: 13px solid transparent;
+  border-bottom: 13px solid transparent;
+  border-right: 20px solid var(--key-ink);
+}
+.dpad[data-b='right'] i {
+  border-right: 0;
+  border-left: 20px solid var(--key-ink);
 }
 @media (orientation: portrait) {
-  .pad {
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr 1fr;
+  .console {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 0.5fr) minmax(0, 1fr);
+    grid-template-areas: 'screen screen' 'l r';
+  }
+  .screen {
+    border-radius: 26px 26px 0 0;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: 1fr auto;
+    grid-template-areas: 'place item' 'row row';
+    padding: 16px 18px 12px;
+  }
+  .screen::before {
+    border-radius: 16px;
+  }
+  .place {
+    grid-area: place;
+    font-size: clamp(48px, 15vw, 72px);
+  }
+  .item {
+    grid-area: item;
+  }
+  .screen-row {
+    grid-area: row;
+  }
+  .joy-l {
+    border-radius: 0 0 0 56px;
+    padding: 46px 12px 18px 12px;
+  }
+  .joy-r {
+    border-radius: 0 0 56px 0;
+    padding: 46px 10px 18px 10px;
+  }
+  .rail {
+    top: 0;
+    bottom: auto;
+    left: 0;
+    right: 0;
+    width: auto;
+    height: 9px;
+    flex-direction: row;
+    background: linear-gradient(180deg, #26232b, #3a3640 50%, #26232b);
+  }
+  .rail b {
+    width: 11px;
+    height: 4px;
+  }
+  .wheel {
+    width: min(38vw, 30vh, 190px);
+  }
+  /* thumbs reach the lower part of the halves */
+  .joy-r {
+    place-items: end center;
+    padding-bottom: 9%;
+  }
+  .abxy {
+    --fb: clamp(46px, 31cqw, 84px);
   }
 }
 .banner {
