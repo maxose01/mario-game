@@ -10,7 +10,7 @@ TRACK_DEFS.push({
   name: 'Magma Keep',
   blurb: "King Mudlet's castle over a lava sea: stompers, fire bars, leaping fireballs and an anti-gravity twist around the great spire.",
   music: 'magma',
-  staff: { 150: 119.6, 200: 100.2 },
+  staff: { 150: 119.0, 200: 101.1 },
   difficulty: 3,
   theme: 'lava',
   hw: 7.5, sh: 3.5, wallL: true, wallR: true,

@@ -488,7 +488,10 @@ class Kart {
   land(g) {
     const impact = -this.vy;
     this.y = g;
-    this.vy = 0;
+    // touch down moving with the ground: on a steep downhill (or sliding down a banked curve) a
+    // kart that stopped dead would find the road dropping away on the very next step and bounce
+    // off it again after every hop
+    this.vy = Math.min(0, this.groundRate());
     this.onGround = true;
     this.gliding = false;
     this.glideT = 0;
@@ -503,6 +506,15 @@ class Kart {
       this.giveBoost(CFG.trickBoostTime, 'trick');
     }
     this.airT = 0;
+  }
+
+  // How fast the ground under the kart rises (+) or falls as it drives over it: the road's slope
+  // (with ramps and moguls) along the way it moves, and its bank across.
+  groundRate() {
+    const loc = this.loc;
+    if (!loc || !loc.path || loc.excess > 0.25) return 0;
+    const vt = this.vx * loc.tx + this.vz * loc.tz, vn = this.vx * loc.nx + this.vz * loc.nz;
+    return ((loc.slope || 0) + this.track.zoneSlope(loc)) * vt - (loc.bank || 0) * vn;
   }
 
   // Remember where we last drove safely, for the cloud rescue.

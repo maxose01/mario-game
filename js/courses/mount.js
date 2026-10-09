@@ -7,18 +7,20 @@
 //   Wobble Dam   - the reservoir, across the top of the dam, an anti-gravity water chute that
 //                  doubles back down along the foot of the dam and its waterfalls, a fork through the pine woods (the Woodcutter Trail) and a log
 //                  bridge over the gorge.
-//   Ski Run      - an open slope with slalom gates, skiers and the ski lift, moguls, then a
-//                  giant ski jump: glide through the boost rings down to the cabin.
+//   Ski Run      - an open slope with slalom gates, skiers and the ski lift, then the bobsleigh
+//                  run (a narrow ice channel of steeply banked curves past cheering grandstands),
+//                  moguls and a giant anti-gravity ski jump: glide through the boost rings down
+//                  to the cabin.
 // See js/tracks.js for the placement conventions.
 //
-// The two glider chasms (segments 12-14 and 33-35) were tuned with the sim: a glider flies the
+// The two glider chasms (segments 12-14 and 43-45) were tuned with the sim: a glider flies the
 // same arc at any speed, so keep each chasm's relative heights, lengths, zones and ring heights
 // together (tests/sim.js checks landings and rings at 50, 150 and 200cc).
 TRACK_DEFS.push({
   id: 'mount',
   name: 'Mount Wobble',
-  blurb: 'Drop from a cargo plane onto the summit and race all the way down: ice cave, dam, pine woods and a giant ski jump.',
-  staff: { 150: 118.9, 200: 103.2 },
+  blurb: 'Drop from a cargo plane onto the summit and race all the way down: ice cave, dam, pine woods, a bobsleigh run and a giant ski jump.',
+  staff: { 150: 139.7, 200: 119.0 },
   difficulty: 4,
   music: 'mount1',
   theme: 'alpine',
@@ -70,13 +72,24 @@ TRACK_DEFS.push({
     { l: 70, rad: 90, y: 78 },                                   // 29
     { r: 50, rad: 90, y: 70 },                                   // 30
     { l: 40, rad: 100, y: 66 },                                  // 31 last slalom bend
-    { s: 110, y: 64, hw: 12 },                                   // 32 moguls
-    { s: 30, y: 62, hw: 11, antigrav: true, style: 'metal' },    // 33 the big anti-gravity ski jump
-    { s: 170, y: 41, wallL: false, wallR: false },               // 34 glide with boost rings
-    { s: 80, y: 34, wallL: true, wallR: true },                  // 35 landing
-    { r: 60, rad: 40, y: 28, hw: 9 },                            // 36
-    { l: 50, rad: 60, y: 22 },                                   // 37 by the frozen pond
-    { s: 170, y: 16 },                                           // 38 cabin finish straight
+    // the bobsleigh run: a narrow ice channel, steeply banked into every curve
+    { s: 60, y: 62, hw: 7.5, sh: 2.5, style: 'ice' },            // 32 the start house
+    { r: 75, rad: 44, y: 57, bank: 32, style: 'ice' },           // 33
+    { s: 60, y: 51, style: 'ice' },                              // 34
+    { l: 165, rad: 36, y: 42, bank: 45, style: 'ice' },          // 35 the Horseshoe
+    { s: 60, y: 36, style: 'ice' },                              // 36
+    { r: 120, rad: 38, y: 30, bank: 40, style: 'ice' },          // 37
+    { s: 30, y: 28, style: 'ice' },                              // 38
+    { l: 70, rad: 46, y: 25, bank: 32, style: 'ice' },           // 39
+    { r: 40, rad: 70, y: 23, bank: 20, style: 'ice' },           // 40
+    { s: 70, y: 21, hw: 12, sh: 5 },                             // 41 out through the finish arch
+    { s: 110, y: 19, hw: 12 },                                   // 42 moguls
+    { s: 30, y: 17, hw: 11, antigrav: true, style: 'metal' },    // 43 the big anti-gravity ski jump
+    { s: 170, y: -4, wallL: false, wallR: false },               // 44 glide with boost rings
+    { s: 80, y: -11, wallL: true, wallR: true },                 // 45 landing
+    { r: 60, rad: 40, y: -17, hw: 9 },                           // 46
+    { l: 50, rad: 60, y: -23 },                                  // 47 by the frozen pond
+    { s: 170, y: -29 },                                          // 48 cabin finish straight
   ],
   branches: [
     { id: 'icefall', name: 'Frozen Falls', seg: 15, phi: 60, gate: 'auto', style: 'ice', hw: 5.5, sh: 1.8 },
@@ -109,14 +122,20 @@ TRACK_DEFS.push({
     { kind: 'boost', seg: 24, t: 0.5, len: 6, d: -3.5, w: 4 },
     { kind: 'boost', seg: 29, t: 0.5, len: 6, d: 0, w: 5 },
     { kind: 'hump', seg: 27, t: 0.55, len: 8, d: -6, w: 12, h: 1 },
-    { kind: 'hump', seg: 32, t: 0.15, len: 8, d: 0, w: 30, h: 1.1 },
-    { kind: 'hump', seg: 32, t: 0.35, len: 8, d: 0, w: 30, h: 1.3 },
-    { kind: 'hump', seg: 32, t: 0.55, len: 8, d: 0, w: 30, h: 1.1 },
+    // the bobsleigh run: a push-off pad in the start house, glassy ice on the straights
+    { kind: 'boost', seg: 32, t: 0.55, len: 6, d: 0, w: 6 },
+    { kind: 'ice', seg: 34, t: 0, t1: 1, d: 0, w: 30 },
+    { kind: 'ice', seg: 36, t: 0, t1: 1, d: 0, w: 30 },
+    { kind: 'boost', seg: 36, t: 0.5, len: 6, d: 2.5, w: 4 },
+    { kind: 'ice', seg: 38, t: 0, t1: 1, d: 0, w: 30 },
+    { kind: 'hump', seg: 42, t: 0.15, len: 8, d: 0, w: 30, h: 1.1 },
+    { kind: 'hump', seg: 42, t: 0.35, len: 8, d: 0, w: 30, h: 1.3 },
+    { kind: 'hump', seg: 42, t: 0.55, len: 8, d: 0, w: 30, h: 1.1 },
     // second glider chasm: the giant ski jump (see the note at the top)
-    { kind: 'boost', seg: 33, t: 0.1, len: 6, d: 0, w: 32 },
-    { kind: 'glide', seg: 33, t: 0.4, len: 10, d: 0, w: 30, h: 2 },
-    { kind: 'gap', seg: 33, t: 0.75, len: 168, d: 0, w: 80 },
-    { kind: 'boost', seg: 38, t: 0.25, len: 6, d: 3.5, w: 4 },
+    { kind: 'boost', seg: 43, t: 0.1, len: 6, d: 0, w: 32 },
+    { kind: 'glide', seg: 43, t: 0.4, len: 10, d: 0, w: 30, h: 2 },
+    { kind: 'gap', seg: 43, t: 0.75, len: 168, d: 0, w: 80 },
+    { kind: 'boost', seg: 48, t: 0.25, len: 6, d: 3.5, w: 4 },
     { kind: 'boost', path: 'woods', u: 0.3, len: 6, d: 0, w: 5 },
     { kind: 'boost', path: 'woods', u: 0.66, len: 6, d: 0, w: 5 },
     { kind: 'ice', path: 'icefall', u: 0.2, u1: 0.8, d: 0, w: 20 },
@@ -124,9 +143,9 @@ TRACK_DEFS.push({
   ],
   rings: [
     { seg: 13, t: 0.4, d: 0, h: 9, r: 4 },
-    { seg: 34, t: 0.2, d: 0, h: 8.4, r: 4 },
-    { seg: 34, t: 0.45, d: 0, h: 7.9, r: 4 },
-    { seg: 34, t: 0.7, d: 0, h: 7.8, r: 4 },
+    { seg: 44, t: 0.2, d: 0, h: 8.4, r: 4 },
+    { seg: 44, t: 0.45, d: 0, h: 7.9, r: 4 },
+    { seg: 44, t: 0.7, d: 0, h: 7.8, r: 4 },
   ],
   boxes: [
     { seg: 0, t: 0.62, d: [-6.5, -2.2, 2.2, 6.5] },
@@ -136,7 +155,8 @@ TRACK_DEFS.push({
     { seg: 16, t: 0.08, d: [-6, -2, 2, 6] },
     { seg: 22, t: 0.35, d: [-6, -2, 2, 6] },
     { seg: 27, t: 0.35, d: [-10, -5, 0, 5, 10] },
-    { seg: 35, t: 0.6, d: [-6, -2, 2, 6] },
+    { seg: 34, t: 0.5, d: [-4.5, -1.5, 1.5, 4.5] },
+    { seg: 45, t: 0.6, d: [-6, -2, 2, 6] },
     { path: 'icefall', u: 0.4, d: [-2.2, 2.2] },
     { path: 'woods', u: 0.5, d: [-2.2, 2.2] },
   ],
@@ -148,8 +168,11 @@ TRACK_DEFS.push({
     { seg: 18, t: 0.3, d: 2, n: 6, gap: 3 },
     { seg: 23, t: 0.3, d: -3, n: 6, gap: 3 },
     { seg: 28, t: 0.2, d: 6, n: 6, gap: 3 },
-    { seg: 32, t: 0.1, d: 0, n: 8, gap: 3 },
-    { seg: 36, t: 0.3, d: -2, n: 6, gap: 3 },
+    // high on the Horseshoe's banking, the fast line
+    { seg: 35, t: 0.3, d: 3.5, n: 8, gap: 3 },
+    { seg: 37, t: 0.35, d: -3, n: 6, gap: 3 },
+    { seg: 42, t: 0.1, d: 0, n: 8, gap: 3 },
+    { seg: 46, t: 0.3, d: -2, n: 6, gap: 3 },
     { path: 'icefall', u: 0.6, d: 0, n: 8, gap: 2.5 },
     { path: 'woods', u: 0.12, d: 0, n: 8, gap: 3 },
   ],
@@ -190,6 +213,10 @@ TRACK_DEFS.push({
     { kind: 'pole', seg: 29, t: 0.9, d: -6 },
     { kind: 'pole', seg: 30, t: 0.3, d: 6 },
     { kind: 'pole', seg: 30, t: 0.75, d: -6 },
+    // the bobsleigh run: icicles off the start house roof, a penguin tobogganing out of the
+    // channel past the finish arch
+    { kind: 'icicle', seg: 32, t: 0.4, d: 2.5, period: 3.3, phase: 0.3 },
+    { kind: 'penguin', seg: 41, t: 0.3, d: 0, range: 8, period: 5 },
   ],
   landmarks: [
     { kind: 'gantry', seg: 0, t: 0 },
@@ -218,9 +245,20 @@ TRACK_DEFS.push({
     { kind: 'bridge', seg: 25, t: 0, seg1: 26, t1: 0, look: 'wood' },
     { kind: 'lodge', seg: 27, t: 0.25, d: -34 },
     { kind: 'skilift', seg: 27, t: 0.1, seg1: 31, t1: 0.8, d: 30 },
-    { kind: 'banner', seg: 32, t: 0.05, d: 0, text: 'SKI JUMP' },
-    { kind: 'bigsnowman', seg: 36, t: 0.5, d: 26 },
-    { kind: 'lake', seg: 37, t: 0.5, d: -30, r: 18 },
-    { kind: 'cabin', seg: 38, t: 0.72, d: 22 },
+    // the bobsleigh run
+    { kind: 'banner', seg: 31, t: 0.85, d: 0, text: 'BOB RUN' },
+    { kind: 'tunnel', seg: 32, t: 0.2, seg1: 32, t1: 0.8, look: 'wood' },
+    { kind: 'grandstand', seg: 35, t: 0.45, d: 1, len: 26 },
+    { kind: 'grandstand', seg: 37, t: 0.5, d: -1, len: 24 },
+    { kind: 'flag', seg: 33, t: 0.5, d: -14 },
+    { kind: 'flag', seg: 36, t: 0.5, d: 14 },
+    { kind: 'flag', seg: 39, t: 0.5, d: 15 },
+    { kind: 'pines', seg: 34, t: 0.5, d: -30, r: 16, n: 12 },
+    { kind: 'pines', seg: 38, t: 0.5, d: 30, r: 16, n: 10 },
+    { kind: 'arch', seg: 41, t: 0.3, look: 'ice' },
+    { kind: 'banner', seg: 42, t: 0.05, d: 0, text: 'SKI JUMP' },
+    { kind: 'bigsnowman', seg: 46, t: 0.5, d: 26 },
+    { kind: 'lake', seg: 47, t: 0.5, d: -30, r: 18 },
+    { kind: 'cabin', seg: 48, t: 0.72, d: 22 },
   ],
 });

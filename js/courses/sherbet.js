@@ -14,7 +14,7 @@ TRACK_DEFS.push({
   name: 'Sherbet Slopes',
   blurb: 'Climb a frosted sherbet peak, glide over the crevasse and skid across a frozen lake full of penguins.',
   music: 'sherbet',
-  staff: { 150: 97.0, 200: 83.2 },
+  staff: { 150: 98.3, 200: 86.1 },
   difficulty: 2,
   theme: 'snow',
   hw: 8, sh: 5, wallL: true, wallR: true,
