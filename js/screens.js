@@ -86,6 +86,7 @@ const Screens = {
     Party.listeners.add(() => {
       if (this.current === 'lobby') this.renderLobby();
       if (this.current === 'garage') this.renderGarage();
+      if (this.current === 'results') this.renderResultsGate();
     });
   },
 
@@ -180,11 +181,12 @@ const Screens = {
       wrap.appendChild(card);
     });
     const n = Party.list().length;
+    // everyone has to be ready before the race can start
     const start = $('startRace');
-    start.disabled = n === 0;
-    const waiting = Party.list().filter((p) => p.kind === 'phone' && p.connected && !p.ready).length;
+    const waiting = Party.waiting();
+    start.disabled = n === 0 || waiting.length > 0;
     const field = s.bots ? ' + bots' : App.staffGhostOn() ? ' vs the Staff Ghost' : '';
-    $('startHint').textContent = n === 0 ? 'Add a racer to start' : waiting ? `Waiting for ${waiting} phone${waiting > 1 ? 's' : ''} to tap Ready (or start anyway)` : `${n} racer${n > 1 ? 's' : ''}${field} on ${course.name}`;
+    $('startHint').textContent = n === 0 ? 'Add a racer to start' : waiting.length ? `Waiting for ${Party.names(waiting)} to tap Ready` : `${n} racer${n > 1 ? 's' : ''}${field} on ${course.name}`;
     $('addTouch').hidden = !matchMedia('(pointer: coarse)').matches || Party.list().some((p) => p.src === 'touch');
   },
 
@@ -336,6 +338,15 @@ const Screens = {
     n.hidden = !news.length;
     n.textContent = news.join('  ·  ');
     $('resultsTitle').textContent = rows.some((r) => r.slot >= 0 && r.place === 1) ? 'Victory!' : 'Results';
+    this.renderResultsGate();
+  },
+  // The next race waits for everyone to be ready (a phone that joined during the race, or one
+  // that un-readied to change its kart).
+  renderResultsGate() {
+    const waiting = Party.waiting();
+    $('resNext').disabled = $('resAgain').disabled = waiting.length > 0;
+    $('resultsWait').hidden = !waiting.length;
+    $('resultsWait').textContent = waiting.length ? `Waiting for ${Party.names(waiting)} to tap Ready` : '';
   },
 };
 

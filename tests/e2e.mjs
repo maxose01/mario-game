@@ -152,9 +152,28 @@ try {
   await ana.click('#sLaps button[data-v="1"]');
   await host.waitForFunction(() => Party.settings.track === 'sherbet' && Party.settings.laps === 1, null, { timeout: 5000 });
   check('leader phone picks the course and laps', true);
-  for (const ph of phones) await ph.click('#readyBtn');
+  // nobody can start until every phone has tapped Ready
+  const gate = async () => ({
+    host: await host.evaluate(() => ({ off: document.getElementById('startRace').disabled, hint: document.getElementById('startHint').textContent })),
+    lead: await ana.evaluate(() => ({ off: document.getElementById('leadStart').disabled, note: document.getElementById('leadWait').textContent })),
+  });
+  let g = await gate();
+  check('no one is ready: both start buttons are off and say who to wait for', g.host.off && g.lead.off && g.host.hint.includes('Ana and Bo') && g.lead.note.includes('you and Bo'), JSON.stringify(g));
+  await host.evaluate(() => App.leaderAction('start'));
+  await ana.evaluate(() => send({ t: 'lead', act: 'start' }));
+  await wait(400);
+  check('the big screen refuses to start a race before everyone is ready', (await host.evaluate(() => App.screen)) === 'lobby' && /Waiting for/.test(await ana.textContent('#meStatus')));
+  await ana.click('#readyBtn');
+  await host.waitForFunction(() => Party.players[0].ready, null, { timeout: 5000 });
+  await ana.waitForFunction(() => /Bo/.test(document.getElementById('leadWait').textContent) && !/you/.test(document.getElementById('leadWait').textContent), null, { timeout: 5000 }).catch(() => {});
+  g = await gate();
+  check('one phone ready: still waiting for the other', g.host.off && g.lead.off && g.host.hint === 'Waiting for Bo to tap Ready' && g.lead.note === 'Waiting for Bo to tap Ready', JSON.stringify(g));
+  await bo.click('#readyBtn');
   await host.waitForFunction(() => Party.list().every((p) => p.ready), null, { timeout: 5000 });
   check('ready states reach the big screen', true);
+  await ana.waitForFunction(() => !document.getElementById('leadStart').disabled, null, { timeout: 5000 }).catch(() => {});
+  g = await gate();
+  check('everyone ready: both start buttons come on', !g.host.off && !g.lead.off && g.lead.note === '', JSON.stringify(g));
   await wait(600);
   await shot(host, 'lobby');
   await shot(ana, 'phone-lobby');
@@ -322,6 +341,20 @@ try {
   check('presets apply', await host.evaluate(() => CFG.grip === PRESETS['Ice Rink'].grip && CFG.topSpeed === CFG_DEFAULTS.topSpeed));
   check('tweaks persist in the browser', await host.evaluate(() => JSON.parse(localStorage.getItem('claykart.params.v1')).grip === PRESETS['Ice Rink'].grip));
   await host.click('#epClose');
+
+  // ---- the next race also waits for everyone (Bo steps away to change karts) ----
+  await host.evaluate(() => {
+    Party.players[1].ready = false;
+    Party.changed();
+  });
+  await ana.waitForFunction(() => document.querySelector('[data-lead="again"]').disabled, null, { timeout: 5000 }).catch(() => {});
+  const resGate = await host.evaluate(() => ({ next: document.getElementById('resNext').disabled, again: document.getElementById('resAgain').disabled, hint: document.getElementById('resultsWait').textContent }));
+  check('results: Next course and Race again wait for everyone', resGate.next && resGate.again && resGate.hint === 'Waiting for Bo to tap Ready' && (await ana.evaluate(() => document.querySelector('[data-lead="next"]').disabled && document.getElementById('rReady').textContent === 'Waiting for Bo to tap Ready')), JSON.stringify(resGate));
+  await host.evaluate(() => {
+    Party.players[1].ready = true;
+    Party.changed();
+  });
+  await ana.waitForFunction(() => !document.querySelector('[data-lead="again"]').disabled, null, { timeout: 5000 }).catch(() => {});
 
   // ---- race again from the leader phone, then back to the lobby ----
   await ana.click('[data-lead="again"]');

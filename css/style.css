@@ -766,6 +766,13 @@ table.results.p2p th:nth-child(4) {
   margin-top: 0.5em;
   flex-wrap: wrap;
 }
+.results-card .hint {
+  margin: 0.4em 0 -0.2em;
+  font-size: 0.72em;
+  font-weight: 800;
+  color: var(--ink-soft);
+  text-align: center;
+}
 
 /* ---------- pause ---------- */
 #scr-pause {

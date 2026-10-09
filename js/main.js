@@ -171,9 +171,12 @@ const App = {
       case 'start':
       case 'again':
       case 'restart':
+        // a new race waits for everyone's Ready (restarting the race on screen doesn't)
+        if (act !== 'restart' && !this.readyCheck()) return;
         this.paused = false;
         return this.startRace();
       case 'next': {
+        if (!this.readyCheck()) return;
         const i = TRACK_DEFS.findIndex((t) => t.id === s.track);
         s.track = TRACK_DEFS[(i + 1) % TRACK_DEFS.length].id;
         Party.saveSettings();
@@ -192,6 +195,18 @@ const App = {
     Sound.play('select');
     Party.saveSettings();
     Party.changed();
+  },
+
+  // Is everyone ready for a new race? If not, say who we are waiting for, here and on the
+  // leader's phone.
+  readyCheck() {
+    const waiting = Party.waiting();
+    if (!waiting.length) return true;
+    const who = Party.names(waiting);
+    this.toast(`Waiting for ${who} to tap Ready`);
+    Sound.play('locked');
+    Party.tellLeader({ t: 'wait', who });
+    return false;
   },
 
   onPartyChange(kind, p) {

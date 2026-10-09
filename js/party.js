@@ -231,9 +231,23 @@ const Party = {
   leader() {
     return this.players.find((p) => p && (p.kind === 'local' || p.connected)) || null;
   },
+  // Phones that still have to tap Ready before a new race may start. Racers on the big screen
+  // itself (keyboard, gamepad, touch) are always ready, and a phone that dropped out can't.
+  waiting() {
+    return this.list().filter((p) => p.kind === 'phone' && p.connected && !p.ready);
+  },
   allReady() {
-    const l = this.list();
-    return l.length > 0 && l.every((p) => p.ready || p.kind === 'local' || !p.connected);
+    return this.list().length > 0 && !this.waiting().length;
+  },
+  // "Ana", "Ana and Bo", "Ana, Bo and Cy"
+  names(list) {
+    const n = list.map((p) => p.name);
+    return n.length > 1 ? n.slice(0, -1).join(', ') + ' and ' + n[n.length - 1] : n[0] || '';
+  },
+  // Tell the race leader's phone (if the leader is on a phone).
+  tellLeader(msg) {
+    const lead = this.leader();
+    if (lead && lead.kind === 'phone' && lead.connected && this.link) this.link.send(lead.pid, msg);
   },
 
   // Fill controls for every human slot (called once per simulation step).

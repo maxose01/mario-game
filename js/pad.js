@@ -169,6 +169,7 @@ function onMessage(m) {
       else show('lobby');
       renderLobby();
       if (m.phase === 'race' && m.racing === false) $('meStatus').textContent = 'A race is on: you join the next one!';
+      renderLeadGate();
       break;
     case 'go':
       P.haveResults = false;
@@ -195,6 +196,12 @@ function onMessage(m) {
       break;
     case 'bought':
       if (m.err) toast(m.err);
+      break;
+    case 'wait':
+      // the big screen refused to start: someone isn't ready yet
+      Buzz.play('locked');
+      if (P.phase === 'lobby') toast(`Waiting for ${m.who} to tap Ready`);
+      renderLeadGate();
       break;
     case 'results':
       Buzz.stop();
@@ -634,6 +641,22 @@ function renderResults(m) {
   }
   $('rLead').hidden = !P.leader;
   $('rWait').hidden = P.leader;
+  renderLeadGate();
+}
+
+// The race leader can only start a new race once everyone has tapped Ready: the start buttons
+// (lobby and results) grey out and say who we are waiting for.
+function renderLeadGate() {
+  const waiting = (P.players || []).filter((q) => q && q.kind === 'phone' && q.connected && !q.ready);
+  const names = waiting.map((q) => (q.slot === P.slot ? 'you' : q.name));
+  const who = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0] || '';
+  const text = waiting.length ? `Waiting for ${who} to tap Ready` : '';
+  $('leadStart').disabled = waiting.length > 0;
+  $('leadWait').hidden = !waiting.length;
+  $('leadWait').textContent = text;
+  for (const b of document.querySelectorAll('[data-lead="next"], [data-lead="again"]')) b.disabled = waiting.length > 0;
+  $('rReady').hidden = !(P.leader && waiting.length);
+  $('rReady').textContent = text;
 }
 
 // ---------- phone niceties ----------

@@ -23,7 +23,10 @@ npm start            # or: node server.js   (no install needed, Node 18+)
    the same Wi-Fi as the server.
 4. On the phone: pick a racer, kart, wheels and paint (buy more with the party's coins), then
    tap **I'm ready!**. The first player is the race leader and can choose the course, laps,
-   engine class, bots and items from their phone; the big screen has the same controls.
+   engine class, bots and items from their phone; the big screen has the same controls. A race
+   only starts once every phone has tapped Ready: until then the start buttons on the big
+   screen and the leader's phone are greyed out and say who everyone is waiting for (the same
+   goes for **Next course** and **Race again** after a race).
    During the race the phone turns into a handheld console tinted in your player colour: the
    steering wheel on the left half, the A B X Y buttons on the right, and a little screen in
    the middle with your place, item, lap (or section), coins and key. It vibrates with what
@@ -265,7 +268,9 @@ npm run test:e2e     # big screen + two phones in Chromium (needs Playwright)
   hits by impact, bumps on both phones, the revving engine, nearby stompers, and a vibration
   pattern on the phone for every jolt the big screen can send.
 - `tests/e2e.mjs` starts the server, opens the big screen and two emulated phones, joins the
-  room from the QR link, customises and buys parts, readies up, starts from the leader's phone,
+  room from the QR link, customises and buys parts, checks that nobody can start a race until
+  every phone is ready (in the lobby and on the results screen), readies up, starts from the
+  leader's phone,
   steers with phone input, checks split screen, finishes the race and checks the results, the
   coin bank, the garage and the Edit Panel. Then it picks Mount Wobble from the leader's phone
   (all four courses listed, laps disabled), starts the run and checks the phone's HUD counts
