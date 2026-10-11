@@ -6,6 +6,8 @@
 //   node tests/e2e.mjs [--shots dir]
 import { createRequire } from 'module';
 import { spawn } from 'child_process';
+import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -33,7 +35,16 @@ const check = (name, ok, detail = '') => {
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---- server ----
-const server = spawn(process.execPath, [path.join(root, 'server.js')], { env: { ...process.env, PORT: String(PORT), QUIET: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
+// (its health log goes to a scratch folder, not the real logs/)
+const logDir = fs.mkdtempSync(path.join(os.tmpdir(), 'claykart-e2e-logs-'));
+const healthLog = () => {
+  try {
+    return fs.readFileSync(path.join(logDir, 'health.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  } catch (e) {
+    return [];
+  }
+};
+const server = spawn(process.execPath, [path.join(root, 'server.js')], { env: { ...process.env, PORT: String(PORT), QUIET: '1', LOG_DIR: logDir }, stdio: ['ignore', 'pipe', 'pipe'] });
 let serverErr = '';
 server.stderr.on('data', (d) => (serverErr += d));
 for (let i = 0; i < 50; i++) {
@@ -52,10 +63,12 @@ check('server refuses dotfiles', blocked.status === 403 || blocked.status === 40
 
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'] });
 const errors = [];
+// (errors this test raises on purpose, to see them reach the health log, carry this tag)
+const PLANTED = 'e2e planted error';
 const watch = (page, tag) => {
   page.on('pageerror', (e) => errors.push(`${tag}: ${e.message}`));
   page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(`${tag}: ${m.text()}`);
+    if (m.type() === 'error' && !m.text().includes(PLANTED)) errors.push(`${tag}: ${m.text()}`);
   });
 };
 const shot = async (page, name) => {
@@ -313,16 +326,70 @@ try {
   await bo.waitForSelector('#v-race:not([hidden])', { timeout: 10000 }).catch(() => {});
   check('rejoined phone goes straight back to the controller', await bo.isVisible('#v-race'));
 
-  // ---- finish ----
-  await host.evaluate(() => {
-    const r = App.race;
-    for (const k of r.karts) r.setAutopilot(k, true);
-    let n = 0;
-    while (r.state !== 'done' && n < 60 * 240) {
-      r.update(1 / 60);
-      n++;
-    }
+  // ---- pause from a phone: anyone pauses and carries on, the race leader also gets Restart and Quit ----
+  await bo.click('#plusBtn');
+  await host.waitForFunction(() => App.paused, null, { timeout: 5000 }).catch(() => {});
+  await ana.waitForSelector('#pauseSheet:not([hidden])', { timeout: 5000 }).catch(() => {});
+  await bo.waitForSelector('#pauseSheet:not([hidden])', { timeout: 5000 }).catch(() => {});
+  const menu = (ph) => ph.evaluate(() => ({ open: !$('pauseSheet').hidden, by: $('pauseBy').textContent, restart: !$('psRestart').hidden, quit: !$('psQuit').hidden, note: !$('pauseNote').hidden }));
+  const pz = {
+    host: await host.evaluate(() => ({ paused: App.paused, menu: !document.getElementById('scr-pause').hidden, by: document.getElementById('pauseBy').textContent })),
+    ana: await menu(ana),
+    bo: await menu(bo),
+  };
+  check('a phone that isn\'t the leader pauses the race, and every phone shows the pause menu', pz.host.paused && pz.host.menu && pz.host.by === 'Paused by Bo. Ana can restart or quit from their phone.' && pz.ana.open && pz.bo.open && pz.bo.by === 'Paused by Bo', JSON.stringify(pz));
+  check('only the race leader\'s phone gets Restart and Quit', pz.ana.restart && pz.ana.quit && !pz.ana.note && !pz.bo.restart && !pz.bo.quit && pz.bo.note, JSON.stringify(pz));
+  await shot(ana, 'phone-pause');
+  await bo.click('#psResume');
+  await host.waitForFunction(() => !App.paused, null, { timeout: 10000 }).catch(() => {});
+  const closed = (ph) => ph.waitForSelector('#pauseSheet', { state: 'hidden', timeout: 10000 }).catch(() => {});
+  await Promise.all([closed(ana), closed(bo)]);
+  const resumed = { host: await host.evaluate(() => App.paused), ana: await ana.isVisible('#pauseSheet'), bo: await bo.isVisible('#pauseSheet') };
+  check('Keep racing on a phone carries on, and the menu closes on every phone', !resumed.host && !resumed.ana && !resumed.bo, 'still paused / menu open: ' + JSON.stringify(resumed));
+
+  // ---- a phone link that stalls without a word ----
+  // Bo's link goes half-open: nothing Bo's phone sends arrives any more, and neither side is told.
+  // (Bo's own watchdog is held back at first, to see the big screen's side.)
+  await bo.evaluate(() => {
+    P.link.send = () => {};
+    P.lastPong = Infinity;
   });
+  // (1.5 s of race time: on this software-rendered screen that is fifteen-odd slow frames)
+  await host.waitForFunction(() => App.race.karts[Party.players[1].kartIdx].auto && Monitor.entries.some((e) => e.kind === 'input-stall'), null, { timeout: 90000, polling: 250 }).catch(() => {});
+  const stall = await host.evaluate(() => {
+    const e = Monitor.entries.filter((q) => q.kind === 'input-stall').pop();
+    const badge = document.getElementById('healthBtn');
+    return {
+      auto: App.race.karts[Party.players[1].kartIdx].auto, age: Party.players[1].inputAge, ana: App.race.karts[Party.players[0].kartIdx].auto,
+      msg: e && e.msg, phone: e && e.data && e.data.phone, toast: App.toastMsg && App.toastMsg.text, badge: !badge.hidden && badge.textContent,
+    };
+  });
+  check('the big screen hands a silent phone\'s kart to the autopilot after 1.5 s', stall.auto && stall.age > 1.5 && !stall.ana, JSON.stringify(stall));
+  check('...tells the room and logs it, with what the phone last said it was doing', /^P2 Bo: no signal from the phone/.test(stall.msg) && stall.toast === stall.msg && /^⚠ \d+$/.test(stall.badge) && !!stall.phone && !!stall.phone.pad && stall.phone.pad.steer === 'drag', JSON.stringify(stall));
+  // now Bo's phone notices its pings go unanswered: it rebuilds the link and takes the kart back
+  await bo.evaluate(() => (P.lastPong = performance.now()));
+  await host.waitForFunction(() => Party.players[1].connected && !App.race.karts[Party.players[1].kartIdx].auto && Monitor.entries.some((e) => e.kind === 'phone-relink'), null, { timeout: 30000 }).catch(() => {});
+  const relink = await host.evaluate(() => ({ auto: App.race.karts[Party.players[1].kartIdx].auto, connected: Party.players[1].connected, log: Monitor.entries.filter((e) => /relink|back|connect/.test(e.kind)).map((e) => `${e.kind}: ${e.msg}`) }));
+  check('the phone rebuilds its link by itself and Bo drives again', !relink.auto && relink.connected && relink.log.some((l) => /^phone-relink: P2 Bo's phone: No answer from the big screen for \d+\.\d s: reconnected$/.test(l)), JSON.stringify(relink));
+  await bo.waitForSelector('#overlay', { state: 'hidden', timeout: 10000 }).catch(() => {});
+  check('...with its controller back on screen', (await bo.isVisible('#v-race')) && !(await bo.isVisible('#overlay')));
+
+  // ---- finish ----
+  // (the autopilot drives everyone home in slices, with a breather after each, so the big screen
+  // keeps answering the phones)
+  for (let i = 0; i < 300; i++) {
+    const done = await host.evaluate(() => {
+      const r = App.race;
+      if (!r || r.state === 'done') return true;
+      for (const k of r.karts) if (!k.finished) r.setAutopilot(k, true);
+      const t0 = performance.now();
+      while (r.state !== 'done' && performance.now() - t0 < 600) r.update(1 / 60);
+      return r.state === 'done';
+    });
+    if (done) break;
+    await wait(1000); // (a frame here takes about a second)
+  }
+  check('the phones kept their links while the race was driven home', await host.evaluate(() => Monitor.entries.filter((e) => e.kind === 'phone-relink').length === 1));
   await host.waitForFunction(() => App.screen === 'results', null, { timeout: 40000 });
   const res = await host.evaluate(() => ({ rows: App.lastResults.length, races: Save.data.races, paid: App.lastResults.filter((r) => r.slot >= 0).map((r) => [r.slot, r.earned, Save.wallet(Party.players[r.slot]).coins]) }));
   check('results with every racer', res.rows === 8, JSON.stringify(res));
@@ -332,6 +399,11 @@ try {
   check('leader phone gets the next-race buttons', await ana.isVisible('#rLead'));
   await wait(800);
   await shot(host, 'results');
+  // a phone that reconnects while the results are up keeps its seat and gets its result again
+  await bo.reload();
+  await bo.waitForSelector('#v-results:not([hidden])', { timeout: 15000 }).catch(() => {});
+  const seat = await host.evaluate(() => ({ name: Party.players[1] && Party.players[1].name, connected: Party.players[1] && Party.players[1].connected, racers: Party.list().length }));
+  check('a phone that reconnects during the results keeps its seat and gets its result back', seat.name === 'Bo' && seat.connected && seat.racers === 2 && (await bo.isVisible('#v-results')) && /\d(st|nd|rd|th)/.test(await bo.textContent('#rPlace')), JSON.stringify(seat));
 
   // ---- audio: every effect, song and engine voice plays without errors ----
   const audioErr = await host.evaluate(() => {
@@ -381,16 +453,28 @@ try {
   });
   await ana.waitForFunction(() => !document.querySelector('[data-lead="again"]').disabled, null, { timeout: 5000 }).catch(() => {});
 
-  // ---- race again from the leader phone, then back to the lobby ----
+  // ---- race again from the leader phone; restart it and quit to the lobby from the phone ----
   await ana.click('[data-lead="again"]');
   await host.waitForFunction(() => App.screen === 'race', null, { timeout: 10000 });
   check('leader phone restarts from the results', true);
   await host.keyboard.press('Escape');
   await host.waitForSelector('#scr-pause:not([hidden])', { timeout: 5000 });
   check('Esc pauses the race', await host.evaluate(() => App.paused));
-  await host.click('#pauseQuit');
-  await host.waitForFunction(() => App.screen === 'lobby', null, { timeout: 5000 });
-  check('quit returns to the lobby with everyone seated', await host.evaluate(() => Party.list().length === 2));
+  await ana.waitForSelector('#pauseSheet:not([hidden])', { timeout: 5000 }).catch(() => {});
+  check('a pause on the big screen opens the pause menu on the phones too', (await ana.isVisible('#pauseSheet')) && (await ana.textContent('#pauseBy')) === 'The race is paused');
+  await host.evaluate(() => (window.__lastRace = App.race));
+  await ana.click('#psRestart');
+  await host.waitForFunction(() => App.screen === 'race' && App.race && App.race !== window.__lastRace && !App.paused, null, { timeout: 20000 }).catch(() => {});
+  await Promise.all([closed(ana), closed(bo)]);
+  const restarted = { host: await host.evaluate(() => App.race !== window.__lastRace && !App.paused && App.race.raceTime < 5), ana: await ana.isVisible('#pauseSheet'), bo: await bo.isVisible('#pauseSheet'), anaRacing: await ana.isVisible('#v-race') };
+  check('the leader restarts the race from the phone\'s pause menu', restarted.host && !restarted.ana && !restarted.bo && restarted.anaRacing, JSON.stringify(restarted));
+  await ana.click('#plusBtn');
+  await ana.waitForSelector('#pauseSheet:not([hidden])', { timeout: 10000 }).catch(() => {});
+  await ana.click('#psQuit');
+  await host.waitForFunction(() => App.screen === 'lobby', null, { timeout: 10000 }).catch(() => {});
+  await Promise.all([ana, bo].map((ph) => ph.waitForSelector('#v-lobby:not([hidden])', { timeout: 10000 }).catch(() => {})));
+  const quit = { host: await host.evaluate(() => App.screen === 'lobby' && Party.list().length === 2), ana: await ana.isVisible('#v-lobby'), bo: await bo.isVisible('#v-lobby'), menu: await ana.isVisible('#pauseSheet') };
+  check('quit from the leader\'s phone takes everyone back to the lobby, still seated', quit.host && quit.ana && quit.bo && !quit.menu, JSON.stringify(quit));
 
   // ---- the point-to-point mountain run ----
   const cards = await host.evaluate(() => [...document.querySelectorAll('#trackPick .track-b')].map((b) => ({ id: b.dataset.track, pips: b.querySelectorAll('.pips b.on').length, text: b.textContent })));
@@ -440,12 +524,33 @@ try {
   await shot(host, 'garage');
   await ana.waitForFunction(() => document.querySelector('#bank').textContent === '320', null, { timeout: 5000 }).catch(() => {});
   check('the phone sees its new balance, the other phone keeps its own', (await ana.textContent('#bank')) === '320' && (await bo.textContent('#bank')) === String(boCoins), `${await ana.textContent('#bank')} / ${await bo.textContent('#bank')}`);
+
+  // ---- the health log ----
+  // script errors on a phone and on the big screen go into it too
+  await bo.evaluate((tag) => phoneError(tag + ' on a phone', 'Error: ' + tag), PLANTED);
+  await host.evaluate((tag) => window.dispatchEvent(new ErrorEvent('error', { message: tag + ' on the big screen', filename: 'e2e', lineno: 1 })), PLANTED);
+  await host.waitForFunction(() => Monitor.entries.some((e) => e.kind === 'phone-error'), null, { timeout: 5000 }).catch(() => {});
+  const kinds = await host.evaluate(() => Monitor.entries.map((e) => e.kind));
+  check('script errors on a phone and on the big screen go into the health log', kinds.includes('phone-error') && kinds.includes('exception'), kinds.join());
+  check('every race is summed up in the log, the abandoned ones too', kinds.includes('race-start') && kinds.includes('race-end') && kinds.includes('race-restart') && kinds.includes('race-quit'), kinds.join());
+  await host.click('#healthBtn');
+  await host.waitForSelector('#epHealthList li', { timeout: 5000 }).catch(() => {});
+  const listed = await host.evaluate(() => ({ open: EditPanel.open, items: [...document.querySelectorAll('#epHealthList li')].map((li) => li.textContent) }));
+  check('the ⚠ badge opens the health log in the Edit Panel', listed.open && listed.items.some((t) => /P2 Bo: no signal from the phone/.test(t)), JSON.stringify(listed.items.slice(0, 3)));
+  await shot(host, 'health-log');
+  await host.click('#epClose');
+  await wait(3500); // (saved to the browser at most every 3 s, sent to the server after 1.5 s)
+  check('the health log is kept in the browser', await host.evaluate(() => JSON.parse(localStorage.getItem('claykart.health.v1')).entries.some((e) => e.kind === 'phone-error')));
+  const file = healthLog();
+  const filed = file.map((e) => e.kind);
+  check('the party server appends the problems to logs/health.jsonl', ['input-stall', 'phone-relink', 'phone-error', 'exception', 'race-restart', 'race-quit'].every((k) => filed.includes(k)) && file.every((e) => e.at && e.level && e.msg && e.from) && !filed.includes('race-start'), filed.join());
 } catch (e) {
   check('test run completed without exceptions', false, e.message);
 } finally {
   check('no page errors', errors.length === 0, errors.slice(0, 5).join(' | '));
   await browser.close();
   server.kill();
+  fs.rmSync(logDir, { recursive: true, force: true });
   if (serverErr) console.log('server stderr:', serverErr);
 }
 

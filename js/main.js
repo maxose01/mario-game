@@ -48,6 +48,7 @@ const App = {
     Input.onNav = (dir, e) => this.nav(dir, e);
     Screens.init();
     EditPanel.init();
+    Monitor.init();
     this.initButtons();
     this.initTouch();
     this.resize(true);
@@ -65,6 +66,7 @@ const App = {
       requestAnimationFrame(loop);
       let dt = (now - last) / 1000;
       last = now;
+      Monitor.frame(dt);
       if (dt > 0.1) dt = 0.1;
       Clay.setTime(now / 1000);
       acc = this.tick(dt, acc);
@@ -276,12 +278,16 @@ const App = {
       this.toast('Add a racer first');
       return;
     }
-    this.endRace();
+    // building a course can hold this screen up for a moment: the phones give it time
+    Party.broadcast({ t: 'loading' });
+    this.endRace('restart');
     this.stopDemo();
     const s = Party.settings;
     const racers = [];
     const rnd = U.rng((Math.random() * 1e9) | 0);
     for (const p of humans) {
+      p.inputAge = 0;
+      p.result = null;
       p.kartIdx = racers.length;
       racers.push({ name: p.name, config: p.config, bot: false, slot: p.slot, color: SLOT_COLORS[p.slot] });
     }
@@ -297,6 +303,7 @@ const App = {
     const def = TRACK_DEFS.find((t) => t.id === s.track) || {};
     // the cargo-plane drop takes longer than the usual sweep down the start straight
     this.race = new Race({ track: s.track, laps: s.laps, cc: s.cc, racers, items: s.items, intro: def.planeDrop ? 4.6 : 2.6 });
+    Monitor.raceStart(this.race, humans);
     this.view = new RaceView(this.race, humans.map((p) => ({ slot: p.slot, idx: p.kartIdx, touch: p.src === 'touch' })));
     this.raceDoneT = 0;
     this.paused = false;
@@ -317,7 +324,9 @@ const App = {
     return !!CFG.staffGhost && !Party.settings.bots && Party.list().length === 1;
   },
 
-  endRace() {
+  // why: 'quit' or 'restart' when a race ends before its results (for the health log)
+  endRace(why = 'quit') {
+    if (this.race && Monitor.race) Monitor.raceEnd(this.race, why);
     if (this.view) this.view.dispose();
     this.view = null;
     this.race = null;
@@ -325,13 +334,19 @@ const App = {
     for (const p of Party.list()) delete p.kartIdx;
   },
 
-  togglePause(on) {
+  // Pause or resume (by: the name of whoever did it from their phone). Any racer can pause and
+  // resume; the race leader's phone also gets Restart and Quit while paused.
+  togglePause(on, by) {
     if (this.screen !== 'race') return;
+    const was = this.paused;
     this.paused = on === undefined ? !this.paused : on;
+    if (this.paused === was && by) return;
+    this.pausedBy = this.paused ? by || '' : '';
     Screens.show(this.paused ? 'pause' : null);
+    $('pauseBy').textContent = this.paused ? (by ? `Paused by ${by}. ` : '') + (Party.leader() && Party.leader().kind === 'phone' ? `${Party.leader().name} can restart or quit from their phone.` : '') : '';
     Sound.play('select');
     if (this.paused) Engines.silence();
-    Party.broadcast({ t: 'paused', v: this.paused });
+    Party.broadcast({ t: 'paused', v: this.paused, by: this.pausedBy });
   },
 
   applyControls() {
@@ -340,14 +355,18 @@ const App = {
       if (p.kartIdx === undefined) continue;
       const k = race.karts[p.kartIdx];
       if (!k || k.finished) continue;
-      const away = p.kind === 'phone' && !p.connected;
+      // a phone that dropped out, or one the big screen hasn't heard from for 1.5 s (a link that
+      // silently stalled), hands its kart to the autopilot instead of steering it blind; it gets
+      // it back the moment its input arrives again
+      const away = p.kind === 'phone' && (!p.connected || p.inputAge > 1.5);
       if (away !== !!k.auto) race.setAutopilot(k, away);
       if (k.auto) continue;
       const c = p.ctl;
       k.ctl.steer = c.steer;
       k.ctl.gas = c.gas;
-      k.ctl.brake = c.brake;
-      k.ctl.drift = c.drift;
+      k.ctl.brake = c.brake || !!c.brakeTap;
+      k.ctl.drift = c.drift || !!c.driftTap;
+      c.brakeTap = c.driftTap = false;
       // with auto-gas the engine would always flood on the grid: Drift revs it instead,
       // so holding Drift as the "1" appears gives the rocket start
       if (race.state === 'countdown' && c.autoGas) {
@@ -382,6 +401,8 @@ const App = {
       this.view.update(frozen ? 0 : dt * CFG.timeScale, events);
       Party.sendRaceHud(this.race, dt);
       Party.sendHaptics(this.race, dt, events, frozen);
+      Party.ageInputs(dt);
+      Monitor.watch(this.race, dt, frozen);
       this.engineSounds(frozen, dt);
       if (this.race.state === 'done') {
         this.raceDoneT += dt;
@@ -576,6 +597,20 @@ const App = {
         case 'finish':
           if (mine) Sound.play('finish');
           break;
+        case 'stuck':
+          // a human kart wedged somewhere: the cloud lifts it out (and the health log hears of it)
+          if (mine) {
+            Sound.play('fall');
+            Monitor.note('warn', 'stuck', `${k.name} was stuck for 8 s: the rescue cloud lifted them out`, Monitor.kartInfo(k), true);
+          }
+          break;
+        case 'timeup': {
+          // someone couldn't finish in time: the race ends anyway
+          const left = (e.a || []).map((q) => q.name);
+          Sound.play('finish');
+          Monitor.note('warn', 'race-timeout', `Time's up: ${left.join(', ') || 'a racer'} didn't finish in time`, { left: (e.a || []).map((q) => Monitor.kartInfo(q)) }, true);
+          break;
+        }
         case 'glide':
           if (mine) Sound.play('glide');
           break;
@@ -685,6 +720,9 @@ const App = {
     if (paid.length) news.unshift('Coins: ' + paid.join(' · '));
     const staff = this.staffNews(race, rows);
     if (staff) news.push(staff);
+    // anything that went wrong this race is in the health log
+    const health = Monitor.raceEnd(race);
+    if (health) news.push(health);
     this.lastResults = rows;
     const secs = race.p2p && race.sections ? race.sections.length : 0;
     this.endRace();
@@ -695,12 +733,16 @@ const App = {
     this.showTouch();
     Sound.tempoMul = 1;
     Sound.playSong('results');
-    Party.sendState();
+    // each phone's result (kept, for a phone that comes back while the results are up), then
+    // the new state
+    const top = rows.slice(0, 8).map((r) => ({ place: r.place, name: r.name, slot: r.slot, time: fmtTime(r.time) }));
     for (const p of Party.list()) {
-      if (p.kind !== 'phone' || !p.connected) continue;
+      if (p.kind !== 'phone') continue;
       const mine = rows.find((r) => r.slot === p.slot);
-      Party.link.send(p.pid, { t: 'results', place: mine ? mine.place : 0, n, earned: mine ? mine.earned : 0, bank: Save.wallet(p).coins, note: staff, rows: rows.slice(0, 8).map((r) => ({ place: r.place, name: r.name, slot: r.slot, time: fmtTime(r.time) })) });
+      p.result = { t: 'results', place: mine ? mine.place : 0, n, earned: mine ? mine.earned : 0, bank: Save.wallet(p).coins, note: staff, rows: top };
+      if (p.connected) Party.link.send(p.pid, p.result);
     }
+    Party.sendState();
   },
 
   // The best human finish against the course's staff time for this engine class (when the

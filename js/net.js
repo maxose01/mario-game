@@ -235,6 +235,8 @@ class PadLink {
     const ws = (this.ws = new WebSocket(Net.wsUrl()));
     ws.onopen = () => ws.send(JSON.stringify({ t: 'join', room: this.code, d: this.hello }));
     ws.onmessage = (ev) => {
+      // a link we closed (to rebuild it) has nothing more to say, not even "you were replaced"
+      if (this.closedByUs) return;
       let m;
       try {
         m = JSON.parse(ev.data);
@@ -246,8 +248,13 @@ class PadLink {
         this.h.onOpen();
         if (!m.host) this.h.onHost(false);
       } else if (m.t === 'm') this.h.onMessage(m.d);
-      else if (m.t === 'error') this.h.onClose(m.reason);
-      else if (m.t === 'hostgone') this.h.onHost(false);
+      else if (m.t === 'error') {
+        // the server said why it is closing us: that is the reason, not the close that follows
+        this.closedByUs = true;
+        this.open = false;
+        this.h.onClose(m.reason);
+        ws.close();
+      } else if (m.t === 'hostgone') this.h.onHost(false);
       else if (m.t === 'hostback') this.h.onHost(true);
     };
     ws.onclose = () => {

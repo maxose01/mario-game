@@ -536,7 +536,8 @@ class Kart {
     this.lastSafe = { x: pt.x, y: pt.y, z: pt.z, head: pt.head, path: p, s };
   }
 
-  startFall() {
+  // cause 'stuck': the rescue cloud lifts a wedged kart out, without the fall's coin penalty
+  startFall(cause) {
     if (this.falling) return;
     this.falling = true;
     this.fallT = 0;
@@ -559,6 +560,13 @@ class Kart {
         const carried = z.s1 + 6 - Math.max(loc.s, z.s0);
         if (carried > 40) this.rescueTime += (carried - 40) / Math.max(10, this.baseSpeed());
       }
+    }
+    if (cause === 'stuck') {
+      // no drop first (it is on solid ground): the cloud lifts it straight out
+      this.fallT = 0.6;
+      this.vx = this.vz = this.vy = 0;
+      this.race.emit('stuck', this);
+      return;
     }
     this.race.emit('fall', this);
     // drop a third of your coins into the void

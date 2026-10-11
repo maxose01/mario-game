@@ -34,6 +34,7 @@ function el(tag, cls, text) {
   return e;
 }
 const ordinal = (n) => n + (n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th');
+const REPLACED = 'This controller was opened again somewhere else, which has your seat now. Tap Try again to race from here.';
 
 function boot() {
   Clay.init();
@@ -93,13 +94,17 @@ function join() {
   overlay('Connecting to the big screen…');
   const online = new URLSearchParams(location.search).get('online') === '1';
   if (P.link) P.link.close();
+  P.joinAt = performance.now();
   P.link = new PadLink(code, { id: P.id, name: P.name, config: P.config }, {
     onOpen: () => {
       P.retries = 0;
+      P.joinAt = 0;
+      P.lastPong = performance.now();
       overlay(null);
       $('joinErr').textContent = '';
       if (P.phase === 'join') show('lobby');
       wakeLock();
+      flushLogs();
     },
     onMessage: (m) => onMessage(m),
     onClose: (reason) => {
@@ -116,7 +121,9 @@ function join() {
         'no-server': 'Could not reach the big screen. Are you on the same Wi-Fi?',
         'no-peerjs': 'Could not load the online connector.',
         network: 'Network trouble. Check your connection.',
+        replaced: REPLACED,
       }[reason] || 'Disconnected.';
+      P.joinAt = 0;
       if (P.phase === 'join') {
         overlay(null);
         $('joinErr').textContent = msg;
@@ -167,15 +174,22 @@ function onMessage(m) {
       if (m.phase === 'race' && m.racing !== false) show('race');
       else if (m.phase === 'results' && P.haveResults) show('results');
       else show('lobby');
+      setPaused(P.phase === 'race' && !!m.paused, m.pausedBy);
       renderLobby();
       if (m.phase === 'race' && m.racing === false) $('meStatus').textContent = 'A race is on: you join the next one!';
       renderLeadGate();
       break;
+    case 'loading':
+      // the big screen is building a course (which can hold it up for a few seconds)
+      P.goAt = performance.now();
+      break;
     case 'go':
       P.haveResults = false;
+      P.goAt = performance.now();
       $('hLap').textContent = m.secs ? `Section 1/${m.secs}` : `Lap 1/${P.settings ? P.settings.laps : 3}`;
       show('race');
       $('sheet').hidden = true;
+      setPaused(false);
       // full screen (if allowed without a tap now) and, once it is, turned on its side
       goFullscreen(true);
       break;
@@ -212,7 +226,8 @@ function onMessage(m) {
       break;
     case 'paused':
       if (m.v) Buzz.stop();
-      banner(m.v ? 'Paused' : 'Go!');
+      setPaused(!!m.v, m.by);
+      if (!m.v) banner('Go!');
       break;
     case 'full':
       overlay('This race is full (four racers). Ask someone to free a seat.', true);
@@ -221,8 +236,15 @@ function onMessage(m) {
       overlay('You were removed from the race.', true);
       P.link.close();
       break;
+    case 'replaced':
+      // this controller was opened again (another tab): that one has the seat now
+      overlay(REPLACED, true);
+      P.link.close();
+      break;
     case 'pong':
       P.ping = performance.now() - m.c;
+      P.lastPong = performance.now();
+      P.relinks = 0;
       break;
   }
 }
@@ -397,6 +419,8 @@ function toast(text) {
 function buildRace() {
   const steer = $('steer');
   let pid = null, x0 = 0;
+  // when the phone was last touched (for the health log: did the touches stop, or the link?)
+  document.addEventListener('pointerdown', () => (P.touchAt = performance.now()), true);
   steer.addEventListener('pointerdown', (e) => {
     if (P.opts.steer !== 'drag') return;
     pid = e.pointerId;
@@ -499,9 +523,26 @@ function buildRace() {
     Buzz.click();
     openSheet();
   });
+  // plus pauses (or carries on when paused); the pause menu has the rest
   $('plusBtn').addEventListener('click', () => {
     Buzz.click();
-    send({ t: 'pause' });
+    send({ t: P.paused ? 'resume' : 'pause' });
+  });
+  $('psResume').addEventListener('click', () => {
+    Buzz.click();
+    send({ t: 'resume' });
+  });
+  $('psRestart').addEventListener('click', () => {
+    Buzz.click();
+    send({ t: 'lead', act: 'restart' });
+  });
+  $('psQuit').addEventListener('click', () => {
+    Buzz.click();
+    send({ t: 'lead', act: 'lobby' });
+  });
+  $('psControls').addEventListener('click', () => {
+    Buzz.click();
+    openSheet();
   });
   $('sheetClose').addEventListener('click', () => ($('sheet').hidden = true));
   $('fsBtn').addEventListener('click', () => {
@@ -517,15 +558,111 @@ function buildRace() {
   setInterval(() => {
     if (P.phase === 'race') sendInput();
   }, 50);
-  setInterval(() => send({ t: 'ping', c: performance.now() }), 3000);
+  setInterval(watchLink, 1000);
   requestAnimationFrame(animateWheel);
 }
+
+// The pause menu on every phone: anyone can carry on; the race leader can also restart the race
+// or quit to the lobby, so nobody has to walk over to the big screen.
+function setPaused(on, by) {
+  P.paused = on;
+  $('pauseSheet').hidden = !on || P.phase !== 'race';
+  if (!on) return;
+  $('pauseBy').textContent = by ? `Paused by ${by}` : 'The race is paused';
+  for (const id of ['psRestart', 'psQuit']) $(id).hidden = !P.leader;
+  $('pauseNote').hidden = P.leader;
+  $('pauseNote').textContent = 'The race leader can restart the race or quit to the lobby.';
+}
+
+// ---------- link watchdog ----------
+// The big screen answers every ping. If the answers stop (a link that died without saying so:
+// flaky Wi-Fi, a half-open connection), reconnect instead of carrying on into the void: during a
+// race after 4 s of silence, otherwise after 10 s. Pings go out every second in a race, with a
+// few words about what the controller is doing for the big screen's health log.
+P.lastPong = P.visibleAt = performance.now();
+P.goAt = P.touchAt = P.joinAt = 0;
+P.relinks = 0; // reconnects in a row without an answer in between
+let pingTick = 0;
+function watchLink() {
+  if (!P.link) return;
+  const now = performance.now();
+  const awake = now - P.visibleAt > 4000 && document.visibilityState === 'visible';
+  if (!P.link.open) {
+    // a connection attempt that neither opens nor fails is tried again
+    if (P.joinAt && now - P.joinAt > 15000 && awake) {
+      if (P.phase === 'join') {
+        P.link.close();
+        P.joinAt = 0;
+        overlay(null);
+        $('joinErr').textContent = 'The big screen did not answer. Check the room code, and that your phone is on the same Wi-Fi.';
+      } else join();
+    }
+    return;
+  }
+  const racing = P.phase === 'race';
+  if (racing || ++pingTick % 3 === 0) send({ t: 'ping', c: now, rtt: Math.round(P.ping || 0), st: racing ? padState(now) : undefined });
+  const quiet = now - P.lastPong;
+  // the big screen can stall for a few seconds while it builds and warms up a course, so it gets
+  // 10 s after saying so and after the start; and each reconnect that brings no answer waits
+  // twice as long as the last
+  const limit = (racing && now - P.goAt > 10000 ? 4000 : 10000) * Math.min(4, 2 ** P.relinks);
+  // (a phone that was asleep or in the background gets a moment before it is judged)
+  if (quiet > limit && awake) {
+    const data = { phase: P.phase, rtt: Math.round(P.ping || 0), mode: P.link.mode, relinks: P.relinks, pad: racing ? padState(now) : undefined };
+    P.relinks++;
+    overlay('Reconnecting to the big screen…');
+    P.lastPong = now;
+    join();
+    // (told over the new link once it is up: the old one swallows everything)
+    logToScreen('warn', 'relink', `No answer from the big screen for ${(quiet / 1000).toFixed(1)} s: reconnected`, data);
+  }
+}
+// What the controller is doing, for the big screen's health log: seconds since the last touch,
+// the steering and the buttons held, what covers the controls, and data stuck in the send queue.
+function padState(now) {
+  const h = P.held;
+  const ui = [['overlay', 'overlay'], ['sheet', 'settings'], ['pauseSheet', 'pause']].filter(([id]) => !$(id).hidden).map(([, name]) => name);
+  return {
+    touch: P.touchAt ? Math.round((now - P.touchAt) / 100) / 10 : -1,
+    s: Math.round(currentSteer() * 100) / 100,
+    held: Object.keys(h).filter((k) => h[k]).join(),
+    steer: P.opts.steer,
+    ui: ui.join(),
+    fs: !!document.fullscreenElement,
+    queue: P.link && P.link.ws ? P.link.ws.bufferedAmount : 0,
+  };
+}
+
+// ---------- health log ----------
+// Problems this phone notices (its own script errors, a link it had to rebuild) go to the big
+// screen's health log; if the link is down they wait for it to come back.
+P.logs = [];
+function logToScreen(level, kind, msg, data) {
+  P.logs.push({ t: 'log', level, kind, msg: String(msg).slice(0, 300), data });
+  if (P.logs.length > 10) P.logs.shift();
+  flushLogs();
+}
+function flushLogs() {
+  if (!P.link || !P.link.open) return;
+  while (P.logs.length) send(P.logs.shift());
+}
+let errorsSent = 0;
+function phoneError(message, stack, file, line) {
+  if (++errorsSent > 8) return; // a broken loop shouldn't flood the log
+  logToScreen('error', 'error', message || 'Script error', { stack: String(stack || '').slice(0, 800), file, line, phase: P.phase, ua: navigator.userAgent.slice(0, 120) });
+}
+window.addEventListener('error', (e) => phoneError(e.message, e.error && e.error.stack, e.filename, e.lineno));
+window.addEventListener('unhandledrejection', (e) => {
+  const r = e.reason || {};
+  phoneError('Unhandled promise rejection: ' + (r.message || String(r)), r.stack);
+});
 
 // The controller settings, from the lobby (before the race) or from minus during it.
 function openSheet() {
   const racing = P.phase === 'race';
-  $('pauseBtn').hidden = !racing;
-  $('sheetClose').textContent = racing ? 'Back to racing' : 'Done';
+  // (opened from the pause menu, it goes back to that)
+  $('pauseBtn').hidden = !racing || P.paused;
+  $('sheetClose').textContent = !racing ? 'Done' : P.paused ? 'Back' : 'Back to racing';
   fsLabel();
   applyOpts();
   $('sheet').hidden = false;
@@ -667,8 +804,6 @@ function renderResults(m) {
     const li = el('li', r.slot === P.slot ? 'me' : '', `${r.name}  ${r.time}`);
     ol.appendChild(li);
   }
-  $('rLead').hidden = !P.leader;
-  $('rWait').hidden = P.leader;
   renderLeadGate();
 }
 
@@ -685,6 +820,9 @@ function renderLeadGate() {
   for (const b of document.querySelectorAll('[data-lead="next"], [data-lead="again"]')) b.disabled = waiting.length > 0;
   $('rReady').hidden = !(P.leader && waiting.length);
   $('rReady').textContent = text;
+  // the next-race buttons are the leader's (who may only now have heard that they lead)
+  $('rLead').hidden = !P.leader;
+  $('rWait').hidden = P.leader;
 }
 
 // ---------- phone niceties ----------
@@ -711,7 +849,10 @@ async function wakeLock() {
   }
 }
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') wakeLock();
+  if (document.visibilityState === 'visible') {
+    P.visibleAt = performance.now();
+    wakeLock();
+  }
 });
 
 window.addEventListener('DOMContentLoaded', boot);

@@ -17,6 +17,7 @@
         <h1 class="wordmark">Clay <span>Kart</span></h1>
         <nav class="bar-actions" aria-label="Game options">
           <button id="muteBtn" type="button" aria-pressed="true" title="Toggle sound (M)">Sound on</button>
+          <button id="healthBtn" type="button" class="health-btn" hidden title="Problems logged: open the health log">⚠ 0</button>
           <button id="fullBtn" type="button" title="Fullscreen (F)">Fullscreen</button>
           <button id="editToggle" type="button" class="primary" aria-expanded="false" aria-controls="editPanel" title="Open the Edit Panel (Tab)">Edit Panel</button>
         </nav>
@@ -160,6 +161,7 @@
               <section class="screen" id="scr-pause" hidden>
                 <div class="card pause-card">
                   <h2>Paused</h2>
+                  <p class="hint" id="pauseBy"></p>
                   <button type="button" class="go" id="pauseResume" data-autofocus>Keep racing</button>
                   <button type="button" id="pauseRestart">Restart race</button>
                   <button type="button" id="pauseQuit">Quit to lobby</button>
@@ -216,6 +218,16 @@
             </div>
           </section>
 
+          <section class="ep-card" id="epHealth">
+            <h3>Health log</h3>
+            <p class="note">What stopped someone racing: a phone that went quiet (its kart goes on autopilot until it's back), a stuck kart, a race that timed out, script errors on the big screen or a phone. Kept in this browser; with the party server running it is also written to <b>logs/health.jsonl</b> next to server.js.</p>
+            <ol class="health" id="epHealthList"></ol>
+            <div class="actions two">
+              <button id="epHealthSave" type="button">Download log</button>
+              <button id="epHealthClear" type="button">Clear log</button>
+            </div>
+          </section>
+
           <section class="ep-card">
             <h3>Share your tweaks</h3>
             <p class="note">Copy writes your changed settings as JSON. Paste someone else's JSON in the box and apply it.</p>
@@ -269,6 +281,7 @@
     <script src="js/party.js"></script>
     <script src="js/screens.js"></script>
     <script src="js/editpanel.js"></script>
+    <script src="js/monitor.js"></script>
     <script src="js/main.js"></script>
   </body>
 </html>

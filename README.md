@@ -35,10 +35,26 @@ npm start            # or: node server.js   (no install needed, Node 18+)
    steering wheel on the left half, the A B X Y buttons on the right, and a little screen in
    the middle with your place, item, lap (or section), coins and key. It vibrates with what
    your kart feels (see **Haptics** below).
+5. Anyone can pause with **+** on their phone. Every phone then shows the pause menu (who
+   paused, **Keep racing**, the controller settings), and the race leader's phone also has
+   **Restart the race** and **Quit to the lobby**, so nobody has to walk over to the big screen.
 
 The server is a single dependency-free file (`server.js`): it serves the game and relays
-messages between the big screen and the phones over WebSockets. If a phone drops out mid-race a
-bot keeps its kart going until it reconnects, and a big screen that reloads gets its room back.
+messages between the big screen and the phones over WebSockets. A big screen that reloads gets
+its room back. If a phone drops out mid-race, or its link goes quiet without saying so (flaky
+Wi-Fi can leave a connection half-open), the big screen hands that kart to the autopilot after
+1.5 s without input, so it isn't left steering into a wall, and gives it back the moment the
+phone is heard again. The phone checks its link too: in a race it pings the big screen every
+second, and when the answers stop for 4 s it rebuilds the link by itself (it allows 10 s while
+the big screen builds a course). A phone that comes back keeps its seat, its kart and its
+wallet, also while the results are up (and gets its result again).
+
+Every race ends. It finishes when every human is home, but a racer who can't finish doesn't
+hold everyone up: once the first human crosses the line, the rest get three quarters of the
+winner's time (at least a minute), and no race runs past its time cap. A kart that is wedged
+somewhere, its driver on the gas or reversing but getting nowhere for 8 s, is lifted back onto
+the road by the rescue cloud (without the fall's coin penalty). Anything like that goes into
+the **health log** (below).
 
 **Online mode.** If the game is opened from a static web host (no `server.js`), Party Race
 falls back to peer-to-peer WebRTC through the public PeerJS broker, so phones can join over the
@@ -75,7 +91,7 @@ Switch **Bots** off when racing alone and you race the **Staff Ghost** instead.
 | Hop & drift (hold) | Space, Shift or Z | Left Shift / Right Shift or / | RB or LB | A |
 | Use item | X, E or Q | Q / . | X | X |
 | Throw backwards / look back | hold C or R | R / , | Y | Y, or swipe down on X |
-| Pause | Esc or P | | Start | + (− opens the controller settings) |
+| Pause | Esc or P | | Start | + opens the pause menu (− the controller settings) |
 | Edit Panel | Tab or ` | | | |
 | Mute / fullscreen | M / F | | | |
 
@@ -198,7 +214,38 @@ It also has feel presets (Drift King, 200cc Rush, Ice Rink, Moon Clay, Item Fren
 a live readout (FPS, resolution, speed, surface, drift charge, boost, place, lap or section,
 road position), playtest tools (give any item, hand out keys, open every gate, star power, max
 coins, skip a lap (on a point-to-point run: skip to the next checkpoint), finish the race, +100
-garage coins, unlock every part, autopilot) and JSON copy/paste for sharing tweaks.
+garage coins, unlock every part, autopilot), the health log and JSON copy/paste for sharing
+tweaks.
+
+## Health log
+
+The big screen keeps an eye on everything that can stop someone from finishing a race
+(`js/monitor.js`) and logs it:
+
+| Entry | What happened |
+| --- | --- |
+| `input-stall` | the big screen heard nothing from a phone for 1.5 s: the autopilot drives until it is back (`input-back`) |
+| `disconnect` / `reconnect` | a phone dropped out mid-race, and came back |
+| `phone-relink` | a phone got no answer to its pings and rebuilt its link |
+| `stuck` | a kart was wedged for 8 s and the rescue cloud lifted it out |
+| `race-timeout` | the race ended without everyone home (the finish window or the time cap) |
+| `nan` | a kart's position went bad and it was put back on the road |
+| `exception` / `phone-error` | a script error on the big screen or on a phone |
+| `hitches` | the big screen stuttered (frames over 250 ms) a lot in one race |
+| `race-start`, `race-end`, `race-quit`, `race-restart` | each race, with a summary: frame rate, the worst input gap per phone, who finished, and the problems |
+
+Problems pop up on the big screen as a message and a **⚠** badge in the top bar, which opens the
+log in the Edit Panel (**Download log** saves it as JSON, **Clear log** empties it). Entries
+about a kart carry a snapshot of it (position on the course, speed, controls, autopilot) and of
+its phone's link (seconds since its last input, round trip, and what the controller last said
+it was doing: seconds since the last touch, steering, buttons held, any menu open, data stuck in
+its send queue), which tells a dead link from a phone nobody was touching from a kart that was
+stuck. The last 400 entries are kept in the big screen's browser. With the party server running,
+the problems and the summaries of races that had any (or ended early) are also appended to
+`logs/health.jsonl` next to `server.js`, one JSON object per line (it rolls over to
+`health.1.jsonl` at 5 MB; `LOG_DIR=/some/folder npm start` puts it elsewhere), and printed in
+the server's terminal. The checks run four times a second over the human karts only, and the
+log touches storage and the network only when something is logged, so it costs no frame rate.
 
 ## Project layout
 
@@ -240,6 +287,8 @@ js/audio.js         synthesized music (a song per world, one per Mount Wobble se
                     sound effects, engine hum, glider wind and the cargo plane's drone
 js/input.js         keyboard, gamepad and touch input, menu navigation
 js/editpanel.js     Edit Panel
+js/monitor.js       race health monitor: the input watchdog's log, stuck and bad-number checks,
+                    notifications, the health log (browser and server)
 js/main.js          app flow, race sounds and section music, the fixed-timestep loop
 js/pad.js           phone controller logic
 js/buzz.js          the phone's haptics engine (vibration patterns, iPhone taps)
@@ -247,6 +296,7 @@ tests/sim.js        headless race and mechanics tests (Node)
 tests/load.js       loads the pure simulation scripts into Node
 tests/e2e.mjs       the party flow in Chromium with emulated phones
 tests/shots.mjs     screenshot harness for courses and menus
+logs/               the party server's health log (created when needed, not in git)
 ```
 
 Courses are written as turtle walks (`{ s: 80 }` straight, `{ r: 90, rad: 30 }` right turn,
@@ -273,7 +323,9 @@ npm run test:e2e     # big screen + two phones in Chromium (needs Playwright)
   moguls, rescue spots, the cargo-plane intro, the staff ghost and every hazard kind, and the
   haptics: brake judder, quiet tarmac and ice against off-road, kerbs and planks, moguls, wall
   hits by impact, bumps on both phones, the revving engine, nearby stompers, and a vibration
-  pattern on the phone for every jolt the big screen can send.
+  pattern on the phone for every jolt the big screen can send. And every race ends: the finish
+  window after the first human is home, the time cap with nobody home, and the rescue cloud
+  for a wedged kart (but not for one nobody is driving).
 - `tests/e2e.mjs` starts the server, opens the big screen and two emulated phones, joins the
   room from the QR link, customises and buys parts, checks that nobody can start a race until
   every phone is ready (in the lobby and on the results screen), readies up, starts from the
@@ -283,7 +335,14 @@ npm run test:e2e     # big screen + two phones in Chromium (needs Playwright)
   (all four courses listed, laps disabled), starts the run and checks the phone's HUD counts
   the sections and the music follows them. On the phone it also checks the Y button throws the
   item backwards, key presses click, a wall hit jolts and braking judders the vibration motor,
-  and Haptics Off keeps it still.
+  and Haptics Off keeps it still. For when things go wrong it pauses from a phone that isn't
+  the leader (every phone shows the pause menu, only the leader's has Restart and Quit) and
+  carries on, restarts and quits from the leader's phone, stalls one phone's link without a
+  word (the big screen must hand its kart to the autopilot, say so and log it, and the phone
+  must rebuild its link and take the kart back), reconnects a phone while the results are up
+  (same seat, its result again), and checks the health log: script errors from a phone and the
+  big screen, race summaries, the ⚠ badge opening the log, the copy in the browser and the
+  server's `logs/health.jsonl` (written to a scratch folder during the test).
 - `tests/shots.mjs` photographs a course for eyeballing scenery, hazards and effects:
 
   ```sh

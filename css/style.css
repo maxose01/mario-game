@@ -1022,6 +1022,38 @@ table.results.p2p th:nth-child(4) {
   font-size: 13px;
   color: var(--ink-soft);
 }
+/* health log: newest first, problems tinted */
+.health {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  max-height: 260px;
+  overflow: auto;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.health li {
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: var(--cream);
+  overflow-wrap: anywhere;
+}
+.health li.warn {
+  background: #ffe9b8;
+}
+.health li.error {
+  background: #ffd3d3;
+}
+.health time {
+  color: var(--ink-soft);
+  margin-right: 6px;
+}
+#topbar .health-btn {
+  background: #ffd166;
+  color: #5a3a00;
+}
 .chips {
   display: flex;
   flex-wrap: wrap;

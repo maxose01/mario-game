@@ -5,8 +5,11 @@
 // - Relays messages between one big screen ("host") and the phones in its room over a tiny
 //   WebSocket implementation (RFC 6455 text frames, ping/pong, close).
 // - /api/info tells the big screen which LAN addresses phones can use to reach this machine.
+// - /api/log takes the big screen's race health log (problems only: a phone that went quiet,
+//   a stuck kart, a race that timed out, script errors) and appends it to logs/health.jsonl,
+//   printing each problem in this terminal too.
 //
-//   PORT=8080 node server.js
+//   PORT=8080 node server.js        (LOG_DIR=/some/folder keeps the health log elsewhere)
 
 const http = require('http');
 const fs = require('fs');
@@ -19,6 +22,10 @@ const ROOT = __dirname;
 const MAX_FRAME = 64 * 1024;
 const MAX_PADS = 8;
 const ROOM_GRACE_MS = 90 * 1000; // a big screen that reloads gets its room back
+const PING_MS = 5000; // keep-alive ping; a connection that misses one answer is closed
+const LOG_DIR = process.env.LOG_DIR ? path.resolve(process.env.LOG_DIR) : path.join(ROOT, 'logs');
+const LOG_FILE = path.join(LOG_DIR, 'health.jsonl');
+const LOG_MAX = 5 * 1024 * 1024; // then it rolls over to health.1.jsonl
 const CODE_CHARS = 'BCDFGHJKLMNPQRSTVWXZ';
 
 const MIME = {
@@ -51,6 +58,26 @@ const server = http.createServer((req, res) => {
   if (url.pathname.endsWith('/js/served.js')) {
     res.writeHead(200, { 'Content-Type': MIME['.js'], 'Cache-Control': 'no-store' });
     res.end("'use strict';\nwindow.CLAYKART_SERVER = true;\n");
+    return;
+  }
+  if (url.pathname === '/api/log' && req.method === 'POST') {
+    let body = '';
+    req.setEncoding('utf8');
+    req.on('data', (c) => {
+      body += c;
+      if (body.length > 256 * 1024) req.destroy();
+    });
+    req.on('end', () => {
+      let list;
+      try {
+        list = JSON.parse(body);
+      } catch (e) {
+        res.writeHead(400).end();
+        return;
+      }
+      writeHealth(Array.isArray(list) ? list : [list], req.socket.remoteAddress);
+      res.writeHead(204).end();
+    });
     return;
   }
   if (url.pathname === '/api/info') {
@@ -270,6 +297,17 @@ function padJoin(conn, m) {
   const code = typeof m.room === 'string' ? m.room.toUpperCase().trim() : '';
   const room = rooms.get(code);
   if (!room) return conn.send({ t: 'error', reason: 'no-room' }), conn.close(4004);
+  // a phone rebuilding its link replaces its old connection (which may not know it is dead yet),
+  // so a full room doesn't turn it away; a controller still open in another tab hears why
+  const id = m.d && typeof m.d.id === 'string' ? m.d.id : '';
+  if (id) {
+    for (const pad of [...room.pads.values()]) {
+      if (pad.hello && pad.hello.id === id) {
+        pad.send({ t: 'error', reason: 'replaced' });
+        pad.close(4000);
+      }
+    }
+  }
   if (room.pads.size >= MAX_PADS) return conn.send({ t: 'error', reason: 'full' }), conn.close(4003);
   conn.role = 'pad';
   conn.room = room;
@@ -279,6 +317,32 @@ function padJoin(conn, m) {
   conn.send({ t: 'joined', pid: conn.pid, host: !!room.host });
   if (room.host) room.host.send({ t: 'join', pid: conn.pid, d: conn.hello });
   log(`room ${code}: phone ${conn.pid} joined (${room.pads.size} connected)`);
+}
+
+// ---------------------------------------------------------------------------
+// the race health log: one JSON object per line
+function writeHealth(list, from) {
+  const lines = [];
+  for (const e of list.slice(0, 200)) {
+    if (!e || typeof e !== 'object') continue;
+    let line = JSON.stringify(Object.assign({}, e, { from }));
+    // an oversized entry keeps its headline (each line stays valid JSON)
+    if (line.length > 8192) line = JSON.stringify({ at: e.at, level: e.level, kind: e.kind, msg: String(e.msg || '').slice(0, 500), from, cut: true });
+    lines.push(line);
+    if (e.level === 'warn' || e.level === 'error') log(`${e.level === 'error' ? 'ERROR' : 'warning'}: ${String(e.msg || e.kind).slice(0, 200)}`);
+  }
+  if (!lines.length) return;
+  try {
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+    try {
+      if (fs.statSync(LOG_FILE).size > LOG_MAX) fs.renameSync(LOG_FILE, path.join(LOG_DIR, 'health.1.jsonl'));
+    } catch (e) {
+      /* no log yet */
+    }
+    fs.appendFileSync(LOG_FILE, lines.join('\n') + '\n');
+  } catch (e) {
+    log('could not write the health log: ' + e.message);
+  }
 }
 
 // keep-alive pings, and forget rooms whose screen never came back
@@ -300,7 +364,7 @@ setInterval(() => {
       log(`room ${code}: closed`);
     }
   }
-}, 15000).unref();
+}, PING_MS).unref();
 
 function log(msg) {
   if (!process.env.QUIET) console.log(`[clay-kart] ${msg}`);

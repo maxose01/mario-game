@@ -130,11 +130,23 @@ const Party = {
       p.config = Save.ownedConfig(hello.config, Save.wallet(p));
       Sound.play('join');
     }
-    if (p.pid && p.pid !== pid) this.byPid.delete(p.pid);
+    if (p.pid && p.pid !== pid) {
+      this.byPid.delete(p.pid);
+      // the same phone on a new link while the old one still looks open: retire the old one (a
+      // dead link, or the controller opened again in another tab)
+      if (p.connected) {
+        this.link.send(p.pid, { t: 'replaced' });
+        this.link.kick(p.pid);
+      }
+    }
+    if (App.screen === 'race' && p.kartIdx !== undefined && !p.connected) Monitor.note('info', 'reconnect', `P${p.slot + 1} ${p.name}'s phone is back`, { slot: p.slot }, true);
     p.pid = pid;
     p.connected = true;
+    p.inputAge = 0;
     this.byPid.set(pid, p);
     this.link.send(pid, { t: 'welcome', slot: p.slot, color: SLOT_COLORS[p.slot], name: p.name, config: p.config });
+    // back while the results are up (a link rebuilt as the race ended): here are yours again
+    if (App.screen === 'results' && p.result) this.link.send(pid, p.result);
     App.onPartyChange('join', p);
     this.changed();
   },
@@ -144,8 +156,10 @@ const Party = {
     if (!p) return;
     p.connected = false;
     p.ctl = blankCtl();
-    // outside a race a vanished phone frees its seat; mid-race a bot takes the wheel
-    if (App.screen !== 'race') this.players[p.slot] = null;
+    // in the lobby a vanished phone frees its seat; mid-race the autopilot takes the wheel, and
+    // through the results the seat is kept for a phone that is only rebuilding its link
+    if (App.screen === 'race') Monitor.note('warn', 'disconnect', `P${p.slot + 1} ${p.name}'s phone disconnected: the autopilot is driving`, Monitor.phoneInfo(p), true);
+    else if (App.screen !== 'results') this.players[p.slot] = null;
     App.onPartyChange('leave', p);
     this.changed();
   },
@@ -157,6 +171,10 @@ const Party = {
         const c = p.ctl;
         c.steer = U.clamp(Number(m.s) || 0, -1, 1);
         c.gas = !!m.g;
+        // a quick tap of Brake or Drift between two simulation steps still counts (latched
+        // until the next step), so a slow big screen never misses a hop
+        if (m.b && !c.brake) c.brakeTap = true;
+        if (m.d && !c.drift) c.driftTap = true;
         c.brake = !!m.b;
         c.drift = !!m.d;
         c.back = !!m.k;
@@ -169,7 +187,8 @@ const Party = {
           c.itemBack = !!m.k;
           p.itemSeen = n;
         }
-        p.lastInput = performance.now();
+        // the big screen's input watchdog: seconds of race time since this phone was last heard
+        p.inputAge = 0;
         break;
       }
       case 'cfg':
@@ -205,10 +224,20 @@ const Party = {
         App.leaderAction(m.act, m.v);
         break;
       case 'pause':
-        App.togglePause(true);
+        App.togglePause(true, p.name);
+        break;
+      case 'resume':
+        App.togglePause(false, p.name);
         break;
       case 'ping':
         this.link.send(pid, { t: 'pong', c: m.c });
+        if (m.rtt > 0) p.rtt = Math.round(m.rtt);
+        // what the controller is doing, for the health log
+        if (m.st && typeof m.st === 'object') p.pad = Monitor.padState(m.st);
+        break;
+      case 'log':
+        // problems a phone noticed (its own errors, a link it had to rebuild)
+        Monitor.fromPhone(p, m);
         break;
     }
   },
@@ -273,6 +302,12 @@ const Party = {
     if (lead && lead.kind === 'phone' && lead.connected && this.link) this.link.send(lead.pid, msg);
   },
 
+  // The input watchdog's clock: race time since each phone was last heard from (a long frame
+  // on a slow screen counts as at most 0.1 s, so it never looks like the phone went quiet).
+  ageInputs(dt) {
+    for (const p of this.players) if (p && p.kind === 'phone') p.inputAge = (p.inputAge || 0) + Math.min(dt, 0.1);
+  },
+
   // Fill controls for every human slot (called once per simulation step).
   readControls() {
     for (const p of this.list()) {
@@ -297,7 +332,8 @@ const Party = {
       if (p.kind !== 'phone' || !p.connected) continue;
       const w = Save.wallet(p);
       this.link.send(p.pid, {
-        t: 'state', phase: App.phase(), racing: p.kartIdx !== undefined, slot: p.slot, color: SLOT_COLORS[p.slot], name: p.name, leader: lead === p, ready: p.ready,
+        t: 'state', phase: App.phase(), racing: p.kartIdx !== undefined, paused: App.screen === 'race' && !!App.paused, pausedBy: App.pausedBy || '',
+        slot: p.slot, color: SLOT_COLORS[p.slot], name: p.name, leader: lead === p, ready: p.ready,
         config: p.config, owned: w.owned, bank: w.coins, settings: this.settings, players, code: this.code,
         tracks: this.courseList(),
       });

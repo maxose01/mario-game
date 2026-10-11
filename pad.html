@@ -123,6 +123,19 @@
       </div>
     </main>
 
+    <!-- the pause menu: anyone carries on; the race leader can restart or quit -->
+    <div class="sheet" id="pauseSheet" hidden>
+      <div class="card">
+        <h2>Paused</h2>
+        <p class="note" id="pauseBy"></p>
+        <button type="button" class="go" id="psResume">Keep racing</button>
+        <button type="button" id="psRestart">Restart the race</button>
+        <button type="button" id="psQuit">Quit to the lobby</button>
+        <button type="button" id="psControls">Controller settings</button>
+        <p class="note" id="pauseNote" hidden></p>
+      </div>
+    </div>
+
     <!-- controller settings: from the lobby (the Controls button) or mid-race (minus) -->
     <div class="sheet" id="sheet" hidden>
       <div class="card">

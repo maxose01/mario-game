@@ -15,6 +15,8 @@ class Race {
     this.p2p = T.p2p;
     this.laps = this.p2p ? 1 : o.laps || 3;
     this.goal = this.p2p ? T.lapLen : this.laps * T.lapLen; // distance to race
+    // no race runs on forever: at a fifth of top speed the course takes this long, plus a minute
+    this.maxTime = 60 + this.goal / (CFG.topSpeed * (CC_CLASSES[o.cc || 150] || CC_CLASSES[150]).speed * 0.2);
     this.sections = T.sections;
     this.ccName = o.cc || 150;
     this.cc = CC_CLASSES[this.ccName] || CC_CLASSES[150];
@@ -144,6 +146,7 @@ class Race {
     this.collideKarts();
     this.items.update(dt);
     this.progress(dt);
+    for (const k of this.karts) if (!k.bot) this.watchStuck(k, dt);
     this.rank();
     this.rubberBand();
     if (this.state === 'race') this.checkDone(dt);
@@ -334,6 +337,34 @@ class Race {
         this.state = 'done';
         this.emit('done');
       }
+      return;
+    }
+    // someone is still out there: once the first human is home the others get three quarters of
+    // the winner's time (at least a minute) to finish, and no race outlasts maxTime, so a racer
+    // who can't finish (stuck, or their phone gone quiet) never holds the race up for good
+    let first = Infinity;
+    for (const k of humans) if (k.finished) first = Math.min(first, k.finishTime);
+    if (this.raceTime > Math.min(first + Math.max(60, first * 0.75), this.maxTime)) {
+      this.timedOut = true;
+      this.state = 'done';
+      this.emit('timeup', null, humans.filter((k) => !k.finished));
+      this.emit('done');
+    }
+  }
+
+  // A human kart wedged somewhere (its driver on the gas or reversing, yet barely moving and not
+  // getting anywhere for 8 s) is lifted back onto the road by the rescue cloud, free of charge.
+  // A kart nobody is driving just waits: the finish window ends the race for it.
+  watchStuck(k, dt) {
+    if (k.bot || k.finished || k.falling || this.state !== 'race' || !k.controllable || k.speed > 3 || !(Math.abs(k.totalS - k.stuckFrom) <= 4)) {
+      k.stuckT = 0;
+      k.stuckFrom = k.totalS;
+      return;
+    }
+    if (k.auto || k.ctl.gas || k.ctl.brake) k.stuckT += dt;
+    if (k.stuckT > 8) {
+      k.stuckT = 0;
+      k.startFall('stuck');
     }
   }
 

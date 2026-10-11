@@ -787,6 +787,54 @@ function run(race, secs, fn) {
 }
 
 // ---------------------------------------------------------------------------
+// Every race ends: a racer who can't finish (wedged, or their phone gone quiet) never holds it up.
+{
+  const two = [{ name: 'Home', bot: false, config: { character: 'pepper' } }, { name: 'Idle', bot: false, config: { character: 'mudlet' } }];
+  let race = new Race({ track: 'meadow', laps: 1, cc: 150, racers: two, seed: 5, items: false });
+  race.items.hazards = [];
+  const [home, idle] = race.karts;
+  race.setAutopilot(home, true);
+  const ev = [];
+  for (let i = 0; i < 60 * 600 && race.state !== 'done'; i++) {
+    race.update(1 / 60); // nobody touches Idle's controls
+    for (const e of race.drainEvents()) ev.push(e);
+  }
+  const up = ev.find((e) => e.type === 'timeup');
+  const left = race.raceTime - home.finishTime;
+  check('once one racer is home the rest get three quarters of the winner\'s time (at least a minute) to finish', home.finished && !idle.finished && race.timedOut && up && up.a.length === 1 && up.a[0] === idle && Math.abs(left - Math.max(60, home.finishTime * 0.75)) < 0.1,
+    `home at ${home.finishTime.toFixed(1)} s, race over at ${race.raceTime.toFixed(1)} s`);
+  check('a kart nobody drives is not "rescued": it just waits for the finish window', !ev.some((e) => e.type === 'stuck' || e.type === 'fall'));
+
+  // with nobody home at all, the time cap ends it
+  race = new Race({ track: 'meadow', laps: 1, cc: 150, racers: [two[1]], seed: 5, items: false });
+  race.items.hazards = [];
+  for (let i = 0; i < 60 * 900 && race.state !== 'done'; i++) race.update(1 / 60);
+  check('no race outlasts its time cap', race.state === 'done' && race.timedOut && Math.abs(race.raceTime - race.maxTime) < 0.1, `cap ${race.maxTime.toFixed(0)} s, over at ${race.raceTime.toFixed(1)} s`);
+
+  // a kart wedged with its driver on the gas: after 8 s the rescue cloud lifts it out, for free
+  race = soloRace('meadow');
+  race.state = 'race';
+  const k = placeOn(race, 40, 0, 0);
+  k.coins = 5;
+  let stuckAt = -1, wedged = true;
+  const ev2 = [];
+  for (let i = 0; i < 60 * 14; i++) {
+    k.ctl.gas = true;
+    if (wedged && !k.falling) k.vx = k.vz = 0; // held fast, as if jammed against something
+    race.update(1 / 60);
+    for (const e of race.drainEvents()) {
+      ev2.push(e);
+      if (e.type === 'stuck' && e.kart === k) {
+        stuckAt = i / 60;
+        wedged = false;
+      }
+    }
+  }
+  check('a kart wedged on the gas for 8 s is lifted out by the rescue cloud, without losing coins', stuckAt > 7.9 && stuckAt < 8.5 && !ev2.some((e) => e.type === 'fall') && k.coins === 5 && !k.falling && k.onGround,
+    `rescued after ${stuckAt.toFixed(2)} s, coins ${k.coins}, falling ${k.falling}`);
+}
+
+// ---------------------------------------------------------------------------
 // The big screen loads every script as a classic script into one global scope: two files
 // declaring the same top-level const/let/class name would stop the game from loading.
 {

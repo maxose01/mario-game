@@ -780,6 +780,10 @@ input {
 }
 .sheet .card {
   width: min(420px, 100%);
+  /* a phone on its side is short: the menu scrolls rather than running off the screen */
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
 }
 
 /* ---- results ---- */

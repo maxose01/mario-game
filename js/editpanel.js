@@ -33,6 +33,7 @@ const EditPanel = {
   toggle(force) {
     this.open = force === undefined ? !this.open : force;
     this.el.hidden = !this.open;
+    if (this.open) this.renderHealth();
     $('editToggle').setAttribute('aria-expanded', String(this.open));
     document.body.classList.toggle('panel-open', this.open);
     window.dispatchEvent(new Event('resize'));
@@ -140,8 +141,29 @@ const EditPanel = {
       App.refreshShowroom();
     });
     $('epResetAll').addEventListener('click', () => this.applyPreset('Classic'));
+    $('epHealthSave').addEventListener('click', () => Monitor.download());
+    $('epHealthClear').addEventListener('click', () => {
+      Monitor.clear();
+      this.renderHealth();
+    });
     $('epExport').addEventListener('click', () => this.exportJSON());
     $('epImport').addEventListener('click', () => this.importJSON());
+  },
+
+  // The newest health log entries (see js/monitor.js).
+  renderHealth() {
+    const list = $('epHealthList');
+    if (!list) return;
+    list.innerHTML = '';
+    const recent = Monitor.entries.slice(-30).reverse();
+    if (!recent.length) list.appendChild(el('li', '', 'Nothing logged yet.'));
+    for (const e of recent) {
+      const li = el('li', e.level);
+      const t = el('time', '', e.at.slice(11, 19));
+      t.dateTime = e.at;
+      li.append(t, (e.level === 'error' ? '✖ ' : e.level === 'warn' ? '⚠ ' : '') + e.msg + (e.count > 1 ? ` (×${e.count})` : ''));
+      list.appendChild(li);
+    }
   },
 
   // The wallets of everyone in the party (with nobody seated, the keyboard's).
