@@ -71,13 +71,13 @@ class ItemSystem {
   //   skier    range [hw] half lateral travel, along [4], period [5], phase
   //                                                          yaw, lean (-1..1, + = toward the right)
   //   cow      range [3], period [9], phase                  yaw, hop (1 -> 0 after a bump)
-  //   mole     period [3.5], phase, upFrac [0.35]            up (0..1), warn
+  //   mole     period [3.5], phase, upFrac [0.35], r [1.2], look [a mole; 'troll']   up (0..1), warn
   //   geyser   period [4], phase, height [7], r [2], look ['lava' on lava, else 'water']
   //                                                          power (0..1), warn, height
   //   podoboo  span [2*hw+8] lateral leap, height [7], period [3], phase
   //                                                          active; x, y, z = the fireball
-  //   bumper   r [1.3]                                       spin, pulse (1 on a hit, decays)
-  //   icicle   period [3.6], phase, ceil [9] (ceiling height)
+  //   bumper   r [1.3], look [a hover bumper; 'toadstool']   spin, pulse (1 on a hit, decays)
+  //   icicle   period [3.6], phase, ceil [9] (ceiling height), look [an icicle; 'star': a falling star]
   //                                                          state (hang, warn, fall, gone,
   //                                                          grow), drop (tip height), grow
   //   pole     r [0.35], color                               -
@@ -158,7 +158,7 @@ class ItemSystem {
         def('period', 3.5);
         def('phase', 0);
         def('upFrac', 0.35);
-        o.r = 1.2;
+        def('r', 1.2);
         o.up = 0;
         o.warn = false;
         break;

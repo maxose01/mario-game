@@ -26,7 +26,9 @@ const SKY_MOODS = {
   // colours of the little treetops on the distant islands; sunI, hemiI, fillI: light strengths
   fairy: { sun: [-0.45, 0.8, -0.35], shade: '#4b3a9c', fill: '#9fb0ff', glow: '#ffae94', backdrop: 'islands', trees: ['#2f7a4c', '#3f9a5c', '#256a40', '#c78bff'], sunI: 1.5, hemiI: 0.95 },
   mirage: { sun: [-0.45, 0.8, -0.35], shade: '#b8708a', fill: '#ffe1b8', glow: '#ffe6a8', backdrop: 'islands', trees: ['#9fc65a', '#c9b45a', '#7fb04a', '#e8c070'], sunI: 2.1, hemiI: 0.8 },
-  dream: { sun: [-0.45, 0.8, -0.35], shade: '#2c2cc4', fill: '#8a8cff', glow: '#b6b8ff', backdrop: 'islands', trees: ['#b9a8ff', '#9a8aff', '#e8d8ff', '#ffe08a'], sunI: 1.15, hemiI: 1.05, cloud: '#c9c0ff' },
+  // (stars: a twinkling star dome with constellations, shooting stars and planets, which fades in as
+  // the lap begins; backdrop elfland: floating islands with castles, toadstool villages and lit windows)
+  dream: { sun: [-0.45, 0.8, -0.35], shade: '#2c2cc4', fill: '#8a8cff', glow: '#b6b8ff', backdrop: 'elfland', stars: true, trees: ['#b9a8ff', '#9a8aff', '#e8d8ff', '#ffe08a'], sunI: 1.15, hemiI: 1.05, cloud: '#c9c0ff' },
 };
 
 const SKY_VERT = `
@@ -63,6 +65,43 @@ void main() {
   gl_FragColor.rgb += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) / 255.0;
 }`;
 
+// The night sky's stars: points on the dome that twinkle (a phase per star), the bigger ones with a
+// four-pointed flare, fading out toward the horizon haze. uAmt fades the whole sky in and out.
+const STAR_VERT = `
+attribute vec3 aCol;
+attribute float aSize;
+attribute float aPhase;
+uniform float uTime;
+uniform float uAmt;
+uniform float uPx;
+varying vec3 vCol;
+varying float vAmp;
+varying float vBig;
+void main() {
+  vec3 d = normalize(position);
+  float tw = 0.62 + 0.38 * sin(uTime * (1.1 + aPhase * 1.6) + aPhase * 60.0);
+  vAmp = tw * uAmt * smoothstep(-0.02, 0.2, d.y);
+  vCol = aCol;
+  vBig = step(2.7, aSize);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  gl_PointSize = aSize * uPx * (0.82 + 0.3 * tw);
+}`;
+const STAR_FRAG = `
+varying vec3 vCol;
+varying float vAmp;
+varying float vBig;
+void main() {
+  vec2 q = gl_PointCoord - 0.5;
+  float r = length(q) * 2.0;
+  float core = 1.0 - smoothstep(0.0, 1.0, r);
+  core *= core;
+  float flare = vBig * 0.9 * (smoothstep(0.1, 0.0, abs(q.x)) * smoothstep(0.5, 0.0, abs(q.y)) + smoothstep(0.1, 0.0, abs(q.y)) * smoothstep(0.5, 0.0, abs(q.x)));
+  float a = (core + flare) * vAmp;
+  if (a < 0.01) discard;
+  gl_FragColor = vec4(vCol, min(1.0, a));
+  #include <colorspace_fragment>
+}`;
+
 class Sky3D {
   constructor(world) {
     this.world = world;
@@ -89,6 +128,7 @@ class Sky3D {
     this.buildClouds();
     this.buildBackdrop();
     if (world.multi) this.buildLapSets();
+    this.buildNight();
   }
 
   keep(o) {
@@ -144,6 +184,7 @@ class Sky3D {
   applyLap(a, b, w) {
     const A = this.sets[a], B = this.sets[b];
     const mix = (out, key) => out.copy(A[key]).lerp(B[key], w);
+    if (this.night) this.setNight(U.lerp(A.mood.stars ? 1 : 0, B.mood.stars ? 1 : 0, w));
     // (the clay shade is one uniform that applyShade() resets every frame, so it is set every time)
     mix(Clay3D.uniforms.uShade.value, 'shade').multiplyScalar(0.4);
     const L = this.lap;
@@ -440,6 +481,7 @@ class Sky3D {
     if (kind === 'range') this.alpineRange(parts);
     else if (kind === 'icepeaks') this.icePeaks(parts);
     else if (kind === 'crags') this.lavaCrags(parts);
+    else if (kind === 'elfland') this.elfIslands(parts);
     else this.islands(parts);
     if (!parts.length) return;
     const mat = this.keep(new THREE.MeshBasicMaterial({ vertexColors: true, fog: false }));
@@ -679,6 +721,290 @@ class Sky3D {
     }
   }
 
+  // Elf realm (Fable Fair's dream lap): floating islands all round, each with a castle, a village of
+  // toadstool houses or a glowing tree. Their windows and lanterns are lit (added after the haze is
+  // baked in, so they stay bright).
+  elfIslands(parts) {
+    const th = this.theme;
+    const rnd = U.rng(this.def.id.length * 13 + 5);
+    const y0 = this.floorY;
+    const roofs = ['#6a4fd0', '#3f8fd8', '#c8508a', '#34b8a0', '#e8a83a'];
+    const stone = ['#e0d8f8', '#cbbff0', '#ece4ff'];
+    const lights = [];
+    const win = (x, y, z, w, h, ang) => lights.push(GK.at(GK.box(w, h, w * 0.6, rnd() < 0.7 ? '#ffe6a0' : '#ffc870', { seed: 5, r: w * 0.2 }), x, y, z, 0, -ang, 0));
+    for (let i = 0; i < 18; i++) {
+      const a = (i / 18) * TAU + rnd() * 0.25;
+      const r = 380 + rnd() * 190, s = 15 + rnd() * 26;
+      const x = Math.cos(a) * r, z = Math.sin(a) * r, y = y0 + 40 + rnd() * 170;
+      const seed = 300 + i * 11, top = y + s * 0.18, kind = i % 3;
+      const pieces = [
+        GK.at(GK.blob(s, s * 0.26, s * 0.9, th.grass, { seed, lump: s * 0.05, vary: 0.06 }), x, y, z),
+        GK.at(GK.cyl(s * 0.97, s * 0.84, s * 0.3, th.dirt, { seed: seed + 1, lump: s * 0.05, segs: 16 }), x, y - s * 0.16, z),
+        GK.at(GK.cone(s * 0.86, s * (1.1 + rnd() * 0.7), th.rock, { seed: seed + 2, lump: s * 0.12, segs: 12 }), x, y - s * (0.85 + rnd() * 0.3), z, Math.PI),
+      ];
+      if (kind === 0) {
+        // a castle: a tall keep, four towers and a curtain wall
+        const st = () => stone[Math.floor(rnd() * stone.length)], roof = () => roofs[Math.floor(rnd() * roofs.length)];
+        pieces.push(GK.at(GK.cyl(s * 0.72, s * 0.74, s * 0.3, st(), { seed: seed + 3, segs: 14 }), x, top + s * 0.15, z));
+        const kh = s * (1.3 + rnd() * 0.5);
+        pieces.push(GK.at(GK.cyl(s * 0.3, s * 0.36, kh, st(), { seed: seed + 4, segs: 9 }), x, top + kh / 2, z));
+        pieces.push(GK.at(GK.cone(s * 0.42, s * 0.85, roof(), { seed: seed + 5, segs: 9, lump: 0 }), x, top + kh + s * 0.4, z));
+        for (let k = 0; k < 4; k++) {
+          const ta = (k / 4) * TAU + rnd() * 0.4, tx = x + Math.cos(ta) * s * 0.58, tz = z + Math.sin(ta) * s * 0.58, th2 = s * (0.7 + rnd() * 0.5);
+          pieces.push(GK.at(GK.cyl(s * 0.14, s * 0.17, th2, st(), { seed: seed + 10 + k, segs: 7 }), tx, top + th2 / 2, tz));
+          pieces.push(GK.at(GK.cone(s * 0.21, s * 0.5, roof(), { seed: seed + 20 + k, segs: 7, lump: 0 }), tx, top + th2 + s * 0.22, tz));
+          win(tx + Math.cos(ta) * s * 0.15, top + th2 * 0.6, tz + Math.sin(ta) * s * 0.15, s * 0.05, s * 0.1, ta);
+        }
+        for (let k = 0; k < 7; k++) {
+          const wa = rnd() * TAU;
+          win(x + Math.cos(wa) * s * 0.33, top + kh * (0.25 + rnd() * 0.6), z + Math.sin(wa) * s * 0.33, s * 0.06, s * 0.11, wa);
+        }
+      } else if (kind === 1) {
+        // a village of toadstool houses
+        const caps = ['#e0589a', '#7a5ad8', '#3f8fd8', '#ff9b3d', '#3fc8b0'];
+        const n = 4 + Math.floor(rnd() * 3);
+        for (let k = 0; k < n; k++) {
+          const ha = (k / n) * TAU + rnd() * 0.5, hr = s * (0.2 + rnd() * 0.45), hx = x + Math.cos(ha) * hr, hz = z + Math.sin(ha) * hr, hs = s * (0.2 + rnd() * 0.16);
+          pieces.push(GK.at(GK.cyl(hs * 0.5, hs * 0.62, hs * 1.1, '#f4ecd8', { seed: seed + 30 + k, segs: 7 }), hx, top + hs * 0.55, hz));
+          pieces.push(GK.at(GK.blob(hs * 1.15, hs * 0.7, hs * 1.15, caps[k % caps.length], { seed: seed + 40 + k, ws: 8, hs: 6 }), hx, top + hs * 1.35, hz));
+          win(hx + Math.cos(ha + 3.1) * hs * 0.5, top + hs * 0.6, hz + Math.sin(ha + 3.1) * hs * 0.5, hs * 0.22, hs * 0.3, ha + 3.1);
+        }
+      } else {
+        // a great glowing tree with lanterns
+        const th2 = s * 1.3;
+        pieces.push(GK.at(GK.cyl(s * 0.1, s * 0.2, th2, '#6a4a3a', { seed: seed + 50, segs: 7 }), x, top + th2 / 2, z));
+        const leaf = ['#6a5ad8', '#3fb8c8', '#9a6ae0'];
+        for (let k = 0; k < 5; k++) {
+          const la = (k / 5) * TAU;
+          pieces.push(GK.at(GK.blob(s * 0.55, s * 0.4, s * 0.55, leaf[k % 3], { seed: seed + 60 + k, ws: 8, hs: 6 }), x + Math.cos(la) * s * 0.4, top + th2 + s * 0.1 + (k % 2) * s * 0.15, z + Math.sin(la) * s * 0.4));
+        }
+        pieces.push(GK.at(GK.blob(s * 0.7, s * 0.5, s * 0.7, leaf[0], { seed: seed + 70, ws: 8, hs: 6 }), x, top + th2 + s * 0.45, z));
+        for (let k = 0; k < 9; k++) {
+          const la = rnd() * TAU, lr = s * (0.3 + rnd() * 0.5);
+          lights.push(GK.at(GK.blob(s * 0.05, s * 0.05, s * 0.05, '#ffe6a0', { seed: 8, ws: 5, hs: 4, lump: 0 }), x + Math.cos(la) * lr, top + th2 * (0.75 + rnd() * 0.45), z + Math.sin(la) * lr));
+        }
+      }
+      for (const pc of pieces) parts.push(this.bake(pc, { y0, y1: y0 + 220, hazeLo: 0.42, hazeHi: 0.18, hazeFar: 0.14 }));
+    }
+    // a scatter of far lights: lanterns drifting between the islands
+    for (let k = 0; k < 60; k++) {
+      const a = rnd() * TAU, r = 330 + rnd() * 260, y = y0 + 30 + rnd() * 230;
+      lights.push(GK.at(GK.blob(1.1, 1.1, 1.1, rnd() < 0.5 ? '#ffe6a0' : '#bfe4ff', { seed: 9, ws: 5, hs: 4, lump: 0 }), Math.cos(a) * r, y, Math.sin(a) * r));
+    }
+    for (const l of lights) parts.push(l);
+  }
+
+  // ---------- the night sky (stars, constellations, shooting stars, planets) ----------
+  // Built when any lap's mood has stars. Everything hangs off the sky dome (so it follows the camera
+  // like the sun does) and fades in and out with setNight(0..1) as the laps change.
+  buildNight() {
+    const world = this.world;
+    const keys = world.multi ? world.themeKeys : [this.def.theme];
+    if (!keys.some((k) => (SKY_MOODS[k] || {}).stars)) return;
+    const C = (h) => new THREE.Color(h);
+    const rnd = U.rng(97);
+    const group = new THREE.Group();
+    const dirOf = (az, el) => new THREE.Vector3(Math.cos(el) * Math.cos(az), Math.sin(el), Math.cos(el) * Math.sin(az));
+    // ---- the stars
+    const pal = ['#ffffff', '#e4ecff', '#c4d6ff', '#fff3d2', '#ffdcec', '#d2fff4'].map(C);
+    const N = 1500, NM = 320, NB = 64;
+    const total = N + NM + NB;
+    const pos = new Float32Array(total * 3), col = new Float32Array(total * 3), size = new Float32Array(total), phase = new Float32Array(total);
+    const R = 598;
+    const put = (i, d, sz, c) => {
+      pos.set([d.x * R, d.y * R, d.z * R], i * 3);
+      col.set([c.r, c.g, c.b], i * 3);
+      size[i] = sz;
+      phase[i] = rnd();
+    };
+    const tmp = new THREE.Vector3();
+    for (let i = 0; i < total; i++) {
+      const y = -0.04 + 1.04 * rnd(), a = rnd() * TAU, r = Math.sqrt(Math.max(0, 1 - y * y));
+      tmp.set(r * Math.cos(a), y, r * Math.sin(a));
+      const big = i >= N + NM, mid = i >= N;
+      put(i, tmp, big ? 5.2 + rnd() * 3.2 : mid ? 2.6 + rnd() * 1.8 : 1.6 + rnd() * 1.1, big ? C(rnd() < 0.5 ? '#fff0c0' : '#cfe0ff') : pal[Math.floor(rnd() * pal.length)]);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('aCol', new THREE.BufferAttribute(col, 3));
+    geo.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
+    geo.setAttribute('aPhase', new THREE.BufferAttribute(phase, 1));
+    const mat = this.keep(
+      new THREE.ShaderMaterial({
+        uniforms: { uTime: { value: 0 }, uAmt: { value: 0 }, uPx: { value: Math.min(2, window.devicePixelRatio || 1) } },
+        vertexShader: STAR_VERT,
+        fragmentShader: STAR_FRAG,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        fog: false,
+      }),
+    );
+    const stars = new THREE.Points(this.keep(geo), mat);
+    stars.frustumCulled = false;
+    stars.renderOrder = -7;
+    group.add(stars);
+    // ---- constellations: a few bright stars joined by faint lines (offsets in degrees around a centre)
+    const shapes = [
+      { az: 212, el: 36, pts: [[-9, -2], [-9, 3], [-4.5, 0.5], [0, 4.5], [4.5, 0.5], [9, 3], [9, -2]], links: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 0]] }, // a crown
+      { az: 158, el: 44, pts: [[0, 8], [0, 3], [0, -2], [0, -8], [-6, 3], [6, 3]], links: [[0, 1], [1, 2], [2, 3], [4, 1], [1, 5]] }, // a swan
+      { az: 262, el: 30, pts: [[-12, 2], [-8, 3], [-4, 1], [0, 0], [1, -4], [6, -5], [8, -1]], links: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 3]] }, // a dipper
+      { az: 322, el: 52, pts: [[0, 0], [3.5, 0], [1.7, 4.5], [0, -7], [3.5, -7]], links: [[0, 1], [1, 2], [2, 0], [0, 3], [3, 4], [4, 1]] }, // a lyre
+      { az: 108, el: 40, pts: [[-7, 0], [-3, 3], [2, 2], [6, -1], [3, -5], [-2, -4]], links: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0]] }, // a ring
+    ];
+    const lp = [], cpos = [], ccol = [], csize = [], cph = [];
+    for (const sh of shapes) {
+      const az = (sh.az * Math.PI) / 180, el = (sh.el * Math.PI) / 180;
+      const dirs = sh.pts.map(([dx, dy]) => dirOf(az + ((dx * Math.PI) / 180) / Math.cos(el), el + (dy * Math.PI) / 180));
+      dirs.forEach((d) => {
+        cpos.push(d.x * R * 0.998, d.y * R * 0.998, d.z * R * 0.998);
+        ccol.push(1, 0.96, 0.82);
+        csize.push(5.4 + rnd() * 1.6);
+        cph.push(rnd());
+      });
+      for (const [i, j] of sh.links) lp.push(dirs[i].x * R * 0.997, dirs[i].y * R * 0.997, dirs[i].z * R * 0.997, dirs[j].x * R * 0.997, dirs[j].y * R * 0.997, dirs[j].z * R * 0.997);
+    }
+    const cgeo = new THREE.BufferGeometry();
+    cgeo.setAttribute('position', new THREE.Float32BufferAttribute(cpos, 3));
+    cgeo.setAttribute('aCol', new THREE.Float32BufferAttribute(ccol, 3));
+    cgeo.setAttribute('aSize', new THREE.Float32BufferAttribute(csize, 1));
+    cgeo.setAttribute('aPhase', new THREE.Float32BufferAttribute(cph, 1));
+    const cstars = new THREE.Points(this.keep(cgeo), mat);
+    cstars.frustumCulled = false;
+    cstars.renderOrder = -7;
+    group.add(cstars);
+    const lgeo = new THREE.BufferGeometry();
+    lgeo.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
+    const lineMat = this.keep(new THREE.LineBasicMaterial({ color: 0x9fb4ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    const lines = new THREE.LineSegments(this.keep(lgeo), lineMat);
+    lines.frustumCulled = false;
+    lines.renderOrder = -7;
+    group.add(lines);
+    // ---- planets: banded, ringed, cratered (unlit)
+    const planets = new THREE.Group();
+    const planet = (az, el, rad, base, bands, ring) => {
+      const g = new THREE.SphereGeometry(1, 40, 24);
+      const p = g.attributes.position, cs = new Float32Array(p.count * 3), L = new THREE.Vector3(-0.55, 0.5, 0.67).normalize();
+      const c0 = C(base), c1 = C(bands[0]), c2 = C(bands[1]), c = new THREE.Color();
+      for (let i = 0; i < p.count; i++) {
+        const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+        const n = noise3(x * 1.4 + 3, y * 5.5, z * 1.4 + 1);
+        c.copy(c0).lerp(c1, U.clamp(Math.sin(y * 11 + n * 5) * 0.5 + 0.5, 0, 1)).lerp(c2, U.clamp((n - 0.5) * 2.2, 0, 1) * 0.6);
+        const lit = U.clamp(0.28 + 0.9 * Math.max(0, x * L.x + y * L.y + z * L.z), 0, 1.15);
+        const rim = Math.pow(1 - Math.abs(z), 3) * 0.25;
+        cs[i * 3] = Math.min(1, c.r * lit + rim * 0.5);
+        cs[i * 3 + 1] = Math.min(1, c.g * lit + rim * 0.55);
+        cs[i * 3 + 2] = Math.min(1, c.b * lit + rim * 0.9);
+      }
+      g.setAttribute('color', new THREE.BufferAttribute(cs, 3));
+      const ball = new THREE.Mesh(this.keep(g), this.keep(new THREE.MeshBasicMaterial({ vertexColors: true, fog: false })));
+      ball.scale.setScalar(rad);
+      const d = dirOf((az * Math.PI) / 180, (el * Math.PI) / 180).multiplyScalar(R * 0.96);
+      const holder = new THREE.Group();
+      holder.position.copy(d);
+      holder.add(ball);
+      if (ring) {
+        const rg = new THREE.RingGeometry(1.35, 2.25, 72, 4);
+        const rp = rg.attributes.position, rc = new Float32Array(rp.count * 4);
+        for (let i = 0; i < rp.count; i++) {
+          const f = (Math.hypot(rp.getX(i), rp.getY(i)) - 1.35) / 0.9;
+          const gap = f > 0.5 && f < 0.58 ? 0.1 : 1; // a dark gap between two bands
+          const al = Math.sin(f * Math.PI) * 0.78 * gap * (0.6 + 0.4 * noise3(f * 14, 2, 5));
+          const rcl = c.copy(C(ring)).lerp(C('#ffffff'), 0.25 * (1 - f));
+          rc.set([rcl.r, rcl.g, rcl.b, al], i * 4);
+        }
+        rg.setAttribute('color', new THREE.BufferAttribute(rc, 4));
+        const rm = new THREE.Mesh(this.keep(rg), this.keep(new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false })));
+        rm.scale.setScalar(rad);
+        rm.rotation.set(Math.PI / 2 - 0.5, 0.15, 0.35);
+        holder.add(rm);
+      }
+      holder.lookAt(0, 0, 0);
+      planets.add(holder);
+      return holder;
+    };
+    planet(214, 21, 54, '#9b7ae8', ['#6a4ad0', '#c8a8ff'], '#ffd7a0');
+    planet(150, 34, 22, '#4fc8c0', ['#2a8fa8', '#bff4ea'], null);
+    planet(264, 44, 12, '#ffd9a0', ['#e8b070', '#fff0cc'], null);
+    planets.renderOrder = -7;
+    group.add(planets);
+    // ---- shooting stars
+    const sc = Clay.makeCanvas(128, 16), sg = sc.getContext('2d');
+    const gr = sg.createLinearGradient(0, 0, 128, 0);
+    gr.addColorStop(0, 'rgba(180,200,255,0)');
+    gr.addColorStop(0.7, 'rgba(235,240,255,0.55)');
+    gr.addColorStop(1, 'rgba(255,255,255,1)');
+    sg.fillStyle = gr;
+    sg.beginPath();
+    sg.moveTo(0, 8);
+    sg.lineTo(120, 1);
+    sg.arc(120, 8, 7, -Math.PI / 2, Math.PI / 2);
+    sg.lineTo(0, 8);
+    sg.fill();
+    const stex = this.keep(new THREE.CanvasTexture(sc));
+    stex.colorSpace = THREE.SRGBColorSpace;
+    const shooters = [];
+    for (let k = 0; k < 6; k++) {
+      const mesh = new THREE.Mesh(this.keep(new THREE.PlaneGeometry(1, 1)), this.keep(new THREE.MeshBasicMaterial({ map: stex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false, opacity: 0 })));
+      mesh.frustumCulled = false;
+      mesh.renderOrder = -6;
+      mesh.visible = false;
+      group.add(mesh);
+      shooters.push({ id: k, mesh, period: 6.5 + k * 1.7, offset: k * 2.3, dur: 0.9 + (k % 3) * 0.15, k: -1 });
+    }
+    group.visible = false;
+    this.sky.add(group);
+    this.night = { group, mat, lineMat, planets, shooters, amt: 0 };
+    this.setNight(world.multi ? 0 : 1);
+  }
+
+  // Fade the night sky in (1) or out (0).
+  setNight(amt) {
+    const n = this.night;
+    if (!n || Math.abs(n.amt - amt) < 1e-4) return;
+    n.amt = amt;
+    n.group.visible = amt > 0.01;
+    n.mat.uniforms.uAmt.value = amt;
+    n.lineMat.opacity = 0.32 * amt;
+    n.planets.visible = amt > 0.5;
+  }
+
+  // One shooting star: a bright head with a long tail crossing the dome now and then (a new path each time).
+  shoot(sh, time, amt) {
+    const c = (time + sh.offset) / sh.period, k = Math.floor(c), u = c - k, dur = sh.dur / sh.period;
+    if (u > dur) {
+      sh.mesh.visible = false;
+      return;
+    }
+    if (sh.k !== k) {
+      sh.k = k;
+      const r = U.rng(k * 131 + sh.id * 17 + 5);
+      sh.az = r() * TAU;
+      sh.el = 0.3 + r() * 0.55;
+      sh.dir = (r() < 0.5 ? -1 : 1) * (0.45 + r() * 0.5);
+      sh.len = 70 + r() * 70;
+      sh.drop = 0.25 + r() * 0.35;
+    }
+    const v = u / dur, R = 585;
+    const at = (q, out) => {
+      const az = sh.az + sh.dir * (q - 0.5) * 0.55, el = sh.el - sh.drop * (q - 0.5);
+      return out.set(Math.cos(el) * Math.cos(az), Math.sin(el), Math.cos(el) * Math.sin(az)).multiplyScalar(R);
+    };
+    const P = at(v, this._sa || (this._sa = new THREE.Vector3())), Q = at(Math.min(1, v + 0.03), this._sb || (this._sb = new THREE.Vector3()));
+    const z = this._sz || (this._sz = new THREE.Vector3()), x = this._sx || (this._sx = new THREE.Vector3()), y = this._sy || (this._sy = new THREE.Vector3());
+    z.copy(P).normalize().negate(); // the plane faces the centre
+    x.copy(Q).sub(P).normalize();
+    x.addScaledVector(z, -x.dot(z)).normalize();
+    y.crossVectors(z, x);
+    const m = this._sm || (this._sm = new THREE.Matrix4());
+    m.makeBasis(x, y, z);
+    sh.mesh.quaternion.setFromRotationMatrix(m);
+    sh.mesh.position.copy(P).addScaledVector(x, -sh.len / 2);
+    sh.mesh.scale.set(sh.len, 5.5, 1);
+    sh.mesh.material.opacity = Math.sin(Math.PI * v) ** 0.5 * amt;
+    sh.mesh.visible = true;
+  }
+
   // ---------- per frame ----------
   // Keep the sky centred on whichever camera is drawing (clouds and backdrops keep their height).
   follow(camera) {
@@ -687,8 +1013,13 @@ class Sky3D {
     this.far.position.set(p.x, 0, p.z);
   }
 
-  // Drift the cloud layers.
+  // Drift the cloud layers; twinkle the stars and let shooting stars cross the sky.
   update(time) {
     for (const l of this.layers) l.obj.rotation.y = time * l.speed;
+    const n = this.night;
+    if (n && n.amt > 0.01) {
+      n.mat.uniforms.uTime.value = time;
+      for (const sh of n.shooters) this.shoot(sh, time, n.amt);
+    }
   }
 }

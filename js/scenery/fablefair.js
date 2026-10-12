@@ -443,7 +443,7 @@ const FableKit = {
   });
 
   Object.assign(LANDMARKS, {
-    // {seg, t, text, sub, look: 'bazaar' | 'canyon' | 'coaster' | 'ship' | 'dream'}: a ride gate over the road:
+    // {seg, t, text, sub, look: 'bazaar' | 'canyon' | 'coaster' | 'ship' | 'dream' | 'elf' | 'garden' | 'stairs' | 'troll'}: a ride gate over the road:
     // two pillars with domes and a pointed arch of clay beads, the name of the ride on a sign.
     ridegate(lm, x, y, z, head, parts) {
       const w = this.track.where(lm), p = w.path;
@@ -457,6 +457,10 @@ const FableKit = {
         coaster: { post: '#c4443c', arch: '#fff0d6', dome: '#ffd166', bg: '#c4443c', fg: '#fff6e0' },
         ship: { post: '#4b3f58', arch: '#6a5a78', dome: '#5ed8a0', bg: '#2b2540', fg: '#9bffcb' },
         dream: { post: '#e6e0ff', arch: '#ffe08a', dome: '#b8a8ff', bg: '#3a2f7a', fg: '#ffe9a8' },
+        elf: { post: '#8a6a4a', arch: '#3fb89a', dome: '#e0589a', bg: '#1f5a50', fg: '#d8fff0' },
+        garden: { post: '#f4ecff', arch: '#ff8ac8', dome: '#ffe08a', bg: '#7a2f78', fg: '#ffe9f4' },
+        stairs: { post: '#e6e0ff', arch: '#9fd8ff', dome: '#ffe08a', bg: '#26307a', fg: '#cfe6ff' },
+        troll: { post: '#7a7690', arch: '#58a070', dome: '#8a8398', bg: '#2c3a34', fg: '#c8f0b8' },
       }[look];
       const P = [];
       FableKit.beads(P, FableKit.archPoints(e, H, 26), 0.95, (k) => (k % 3 ? L.arch : L.post), 10);

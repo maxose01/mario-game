@@ -1866,14 +1866,22 @@ class World3D {
     const T = this.track;
     this.padTex = this.chevronTexture();
     const padMat = this.keep(new THREE.MeshStandardMaterial({ map: this.padTex, emissive: 0xff9a3c, emissiveIntensity: 0.6, emissiveMap: this.padTex, roughness: 0.5, transparent: true }));
-    // a candy trail's pads (zone look 'candy'): peppermint chevrons, sugar sprinkles, a pink glow
-    let candyMat = null;
-    const candyPad = () => {
-      if (!candyMat) {
-        this.candyTex = this.chevronTexture(true);
-        candyMat = this.keep(new THREE.MeshStandardMaterial({ map: this.candyTex, emissive: 0xff7fb4, emissiveIntensity: 0.5, emissiveMap: this.candyTex, roughness: 0.35, transparent: true }));
+    // pads that wear a look of their own (zone look): the candy trail's peppermint chevrons, sugar
+    // sprinkles and pink glow; the elf realm's stardust (gold chevrons in a violet sparkle)
+    const PAD_LOOKS = {
+      candy: { emissive: 0xff7fb4, intensity: 0.5, rough: 0.35, glow: '#ff7fb8', halo: '#ff9ccb', scroll: 1.2 },
+      stardust: { emissive: 0xb59cff, intensity: 0.65, rough: 0.3, glow: '#a98cff', halo: '#d9ccff', scroll: 1.5 },
+    };
+    this.padLooks = {};
+    const padLook = (name) => {
+      const spec = PAD_LOOKS[name];
+      if (!spec) return null;
+      if (!this.padLooks[name]) {
+        const tex = this.chevronTexture(name);
+        const mat = this.keep(new THREE.MeshStandardMaterial({ map: tex, emissive: spec.emissive, emissiveIntensity: spec.intensity, emissiveMap: tex, roughness: spec.rough, transparent: true }));
+        this.padLooks[name] = { tex, mat, spec };
       }
-      return candyMat;
+      return this.padLooks[name];
     };
     const iceMat = this.keep(Clay3D.material({ color: 0xd9f0ff, rough: 0.25, wobble: 0, transparent: true, opacity: 0.78, rim: 0.2 }));
     const mudMat = this.keep(Clay3D.material({ color: 0x7a4b30, rough: 0.9, wobble: 0.04, rim: 0.4 }));
@@ -1883,15 +1891,15 @@ class World3D {
         const a = (pt) => Math.max(z.d0, -pt.hw - pt.sh), b = (pt) => Math.min(z.d1, pt.hw + pt.sh);
         const s0 = z.s0, s1 = z.s1;
         if (z.kind === 'boost') {
-          const candy = z.look === 'candy';
+          const look = padLook(z.look);
           const g = this.strip(p, s0, s1, a, b, 0.1, { vScale: 3 });
           // v runs along the pad: re-base so chevrons point forward
           const uv = g.attributes.uv;
           for (let v = 0; v < uv.count; v++) uv.setY(v, -uv.getY(v));
-          this.put(g, candy ? candyPad() : padMat, { cast: false, name: 'boost' });
-          this.put(this.strip(p, s0 - 1.5, s1 + 1.5, (pt) => a(pt) - 1.2, (pt) => b(pt) + 1.2, 0.16, { vNorm: true }), this.flatGlowMaterial(candy ? '#ff7fb8' : '#ff9a3c', 0, true), { cast: false, receive: false });
+          this.put(g, look ? look.mat : padMat, { cast: false, name: 'boost' });
+          this.put(this.strip(p, s0 - 1.5, s1 + 1.5, (pt) => a(pt) - 1.2, (pt) => b(pt) + 1.2, 0.16, { vNorm: true }), this.flatGlowMaterial(look ? look.spec.glow : '#ff9a3c', 0, true), { cast: false, receive: false });
           const c = p.point((s0 + s1) / 2, (z.d0 + z.d1) / 2);
-          this.glow(c.x, c.y + 0.7, c.z, Math.min(4, (z.d1 - z.d0) * 0.45 + 1.2), candy ? '#ff9ccb' : '#ffb35c', 1);
+          this.glow(c.x, c.y + 0.7, c.z, Math.min(4, (z.d1 - z.d0) * 0.45 + 1.2), look ? look.spec.halo : '#ffb35c', 1);
         } else if (z.kind === 'ice') {
           this.put(this.strip(p, s0, s1, a, b, 0.09, { across: 4, vScale: 6 }), iceMat, { cast: false, name: 'ice' });
         } else if (z.kind === 'mud') {
@@ -1987,11 +1995,14 @@ class World3D {
     this.put(this.strip(p, z.s0, z.s1, (pt) => Math.min(b(pt), Math.max(pt.hw, a(pt))), (pt) => b(pt), 0.08, so), this.stillMat, { cast: false, far: true, name: 'ramps' });
   }
 
-  chevronTexture(candy) {
+  // the boost pad's chevron: orange and yellow; look 'candy': peppermint pink with sprinkles; look
+  // 'stardust': pale gold on night violet, with a scatter of little four-point stars
+  chevronTexture(look) {
+    const candy = look === 'candy' || look === true, dust = look === 'stardust';
     return this.canvasTex(64, 64, (g) => {
-      g.fillStyle = candy ? '#fff0f6' : '#ff8a3d';
+      g.fillStyle = candy ? '#fff0f6' : dust ? '#2b2272' : '#ff8a3d';
       g.fillRect(0, 0, 64, 64);
-      g.fillStyle = candy ? '#ff4f93' : '#ffe066';
+      g.fillStyle = candy ? '#ff4f93' : dust ? '#ffe9a6' : '#ffe066';
       g.beginPath();
       g.moveTo(8, 50);
       g.lineTo(32, 18);
@@ -2019,6 +2030,32 @@ class World3D {
           g.rotate(k * 1.9);
           g.fillRect(-3, -1.2, 6, 2.4);
           g.restore();
+        }
+      }
+      if (dust) {
+        // a white core along the chevron, then the stars
+        g.strokeStyle = 'rgba(255,255,255,0.8)';
+        g.lineWidth = 2;
+        g.beginPath();
+        g.moveTo(14, 46);
+        g.lineTo(32, 23);
+        g.lineTo(50, 46);
+        g.stroke();
+        const tint = ['#ffffff', '#c7b4ff', '#ffd98a', '#8fe8ff'];
+        for (let k = 0; k < 12; k++) {
+          const x = 4 + ((k * 23) % 56), y = 4 + ((k * 37) % 56), r = 2 + (k % 3);
+          g.fillStyle = tint[k % 4];
+          g.beginPath();
+          g.moveTo(x, y - r * 1.6);
+          g.lineTo(x + r * 0.5, y - r * 0.5);
+          g.lineTo(x + r * 1.6, y);
+          g.lineTo(x + r * 0.5, y + r * 0.5);
+          g.lineTo(x, y + r * 1.6);
+          g.lineTo(x - r * 0.5, y + r * 0.5);
+          g.lineTo(x - r * 1.6, y);
+          g.lineTo(x - r * 0.5, y - r * 0.5);
+          g.closePath();
+          g.fill();
         }
       }
     });
@@ -3165,7 +3202,7 @@ class World3D {
     this.uGlow.value = g;
     for (const a of this.anims) a(time);
     if (this.padTex) this.padTex.offset.y = -time * 1.8;
-    if (this.candyTex) this.candyTex.offset.y = -time * 1.2;
+    for (const k in this.padLooks) this.padLooks[k].tex.offset.y = -time * this.padLooks[k].spec.scroll;
     if (this.metalGlowTex) this.metalGlowTex.offset.y = -time * 0.9;
     if (race && this.gates) {
       race.items.gates.forEach((gt, i) => {

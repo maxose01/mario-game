@@ -58,11 +58,11 @@
 //                glide (a ramp that opens the glider), hump (a mogul of height h),
 //                gap (no ground: a chasm), current (water stream: flow = units/s along the road,
 //                negative = against you), antigrav (same as the segment flag)
-//              boost pads may carry look: 'candy' (peppermint swirls instead of chevrons) and
-//              power (the share of a full pad's boost they give, e.g. 0.5); shallow zones may
-//              carry look: 'splash' (a kart wading in at speed throws a big splash: the pool
-//              at the foot of a water chute); on a course whose laps differ a hump is drawn
-//              as a swell of the road's own surface
+//              boost pads may carry look: 'candy' (peppermint swirls instead of chevrons) or
+//              'stardust' (pale gold stars on night violet) and power (the share of a full pad's
+//              boost they give, e.g. 0.5); shallow zones may carry look: 'splash' (a kart wading
+//              in at speed throws a big splash: the pool at the foot of a water chute); on a
+//              course whose laps differ a hump is drawn as a swell of the road's own surface
 //   boxes      [{seg, t, d: [offsets]}] item box rows
 //   coins      [{seg, t, d, n, gap, dd, h}] coin lines
 //   keys       [{seg, t, d, h}] the floating key for the course's locked gate

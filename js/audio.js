@@ -162,9 +162,9 @@ const SONGS = {
   // over the E chord): a celesta over a warm pad and rippling music-box arpeggios.
   fable3: {
     bpm: 112,
-    lead: 'A5 . D6 . F#6 - - . | E6 . C#6 . A5 . B5 . | D6 . F#6 . B6 - A6 . | E6 - D6 . B5 . A5 . | F#6 . A6 . F#6 . D6 . | E6 . A5 . C#6 . E6 . | D6 . B5 . D6 . F#6 . | E6 - - - A5 - - . | D6 . F#6 . A6 - - . | G#6 . E6 . B5 . E6 . | F#6 . C#6 . A5 . C#6 . | D6 . G6 . B6 - A6 . | F#6 - A6 - D6 - - . | G#6 . B6 . E6 - - . | C#6 . E6 . A6 - G#6 - | E6 - - - . . . .',
-    bass: 'D3 - - - - - - - | A2 - - - - - - - | B2 - - - - - - - | G2 - - - - - - - | D3 - - - - - - - | A2 - - - - - - - | B2 - - - - - - - | A2 - - - - - - - | D3 - - - - - - - | E3 - - - - - - - | F#3 - - - - - - - | G2 - - - - - - - | D3 - - - - - - - | E3 - - - - - - - | A2 - - - - - - - | A2 - - - - - - -',
-    arp: 'D4 F#4 A4 F#4 D5 A4 F#4 A4 | A3 C#4 E4 C#4 A4 E4 C#4 E4 | B3 D4 F#4 D4 B4 F#4 D4 F#4 | G3 B3 D4 B3 G4 D4 B3 D4 | D4 F#4 A4 F#4 D5 A4 F#4 A4 | A3 C#4 E4 C#4 A4 E4 C#4 E4 | B3 D4 F#4 D4 B4 F#4 D4 F#4 | A3 C#4 E4 C#4 A4 E4 C#4 E4 | D4 F#4 A4 F#4 D5 A4 F#4 A4 | E4 G#4 B4 G#4 E5 B4 G#4 B4 | F#3 A3 C#4 A3 F#4 C#4 A3 C#4 | G3 B3 D4 B3 G4 D4 B3 D4 | D4 F#4 A4 F#4 D5 A4 F#4 A4 | E4 G#4 B4 G#4 E5 B4 G#4 B4 | A3 C#4 E4 C#4 A4 E4 C#4 E4 | A3 C#4 E4 C#4 A4 E4 C#4 E4',
+    lead: 'A5 . D6 . F#6 - - . | E6 . C#6 . A5 . B5 . | D6 . F#6 . B6 - A6 . | E6 - D6 . B5 . A5 . | F#6 . A6 . F#6 . D6 . | E6 . A5 . C#6 . E6 . | D6 . B5 . D6 . F#6 . | E6 - - - A5 - - . | D6 . F#6 . A6 - - . | G#6 . E6 . B5 . E6 . | F#6 . C#6 . A5 . C#6 . | D6 . G6 . B6 - A6 . | F#6 - A6 - D6 - - . | G#6 . B6 . E6 - - . | C#6 . E6 . A6 - G#6 - | E6 - - - . . . . | G5 . B5 . D6 . B5 . | A5 . D6 . F#6 - D6 . | G5 . B5 . E6 - D6 . | E6 . C#6 . A5 - . . | B5 . D6 . G6 . F#6 E6 | D6 . F#6 . B6 - A6 F#6 | E6 . G6 . A6 - E6 . | F#6 - D6 - . . . . | B4 . . . D5 . F#5 . | G4 . . . B4 . D5 . | D5 . . . F#5 . A5 . | C#5 . E5 . A5 - . . | E5 . . . G5 . B5 . | D5 . G5 . B5 - A5 . | E5 . A5 . C#6 . E6 . | F#6 - E6 - . . A5 .',
+    bass: 'D3 - - - - - - - | A2 - - - - - - - | B2 - - - - - - - | G2 - - - - - - - | D3 - - - - - - - | A2 - - - - - - - | B2 - - - - - - - | A2 - - - - - - - | D3 - - - - - - - | E3 - - - - - - - | F#3 - - - - - - - | G2 - - - - - - - | D3 - - - - - - - | E3 - - - - - - - | A2 - - - - - - - | A2 - - - - - - - | G2 - - - - - - - | D3 - - - - - - - | E3 - - - - - - - | A2 - - - - - - - | G2 - - - - - - - | B2 - - - - - - - | A2 - - - - - - - | D3 - - - - - - - | B2 - - - - - - - | G2 - - - - - - - | D3 - - - - - - - | A2 - - - - - - - | E3 - - - - - - - | G2 - - - - - - - | A2 - - - - - - - | A2 - - - - - - -',
+    arp: 'D4 F#4 A4 F#4 D5 A4 F#4 A4 | A3 C#4 E4 C#4 A4 E4 C#4 E4 | B3 D4 F#4 D4 B4 F#4 D4 F#4 | G3 B3 D4 B3 G4 D4 B3 D4 | D4 F#4 A4 F#4 D5 A4 F#4 A4 | A3 C#4 E4 C#4 A4 E4 C#4 E4 | B3 D4 F#4 D4 B4 F#4 D4 F#4 | A3 C#4 E4 C#4 A4 E4 C#4 E4 | D4 F#4 A4 F#4 D5 A4 F#4 A4 | E4 G#4 B4 G#4 E5 B4 G#4 B4 | F#3 A3 C#4 A3 F#4 C#4 A3 C#4 | G3 B3 D4 B3 G4 D4 B3 D4 | D4 F#4 A4 F#4 D5 A4 F#4 A4 | E4 G#4 B4 G#4 E5 B4 G#4 B4 | A3 C#4 E4 C#4 A4 E4 C#4 E4 | A3 C#4 E4 C#4 A4 E4 C#4 E4 | G3 B3 D4 B3 G4 D4 B3 D4 | D4 F#4 A4 F#4 D5 A4 F#4 A4 | E3 G3 B3 G3 E4 B3 G3 B3 | A3 C#4 E4 C#4 A4 E4 C#4 E4 | G3 B3 D4 B3 G4 D4 B3 D4 | B3 D4 F#4 D4 B4 F#4 D4 F#4 | A3 C#4 E4 C#4 A4 E4 C#4 E4 | D4 F#4 A4 F#4 D5 A4 F#4 A4 | B3 D4 F#4 D4 B4 F#4 D4 F#4 | G3 B3 D4 B3 G4 D4 B3 D4 | D4 F#4 A4 F#4 D5 A4 F#4 A4 | A3 C#4 E4 C#4 A4 E4 C#4 E4 | E3 G3 B3 G3 E4 B3 G3 B3 | G3 B3 D4 B3 G4 D4 B3 D4 | A3 C#4 E4 C#4 A4 E4 C#4 E4 | A3 C#4 E4 C#4 A4 E4 C#4 E4',
     drums: 'b.p.b.p.',
     leadType: 'celesta',
     leadVol: 0.55,
@@ -821,7 +821,14 @@ const SFX = {
     else for (let i = 0; i < 4; i++) s.tone(420 + Math.random() * 520, 0.08, { type: 'sine', slide: 1300, vol: 0.05, delay: 0.25 + i * 0.13 });
   },
   // an icicle shattering on the road: a sharp crack and a spray of glassy tinkles
-  icicle: (s) => {
+  // (a falling star: the same crack, then a run of chimes)
+  icicle: (s, look) => {
+    if (look === 'star') {
+      s.noise(0.07, { filter: 'highpass', freq: 3000, vol: 0.2 });
+      s.tone(noteFreq('E3'), 0.35, { type: 'sine', slide: noteFreq('E2'), vol: 0.2 });
+      for (const [n, d] of [['E6', 0.02], ['A6', 0.07], ['C#7', 0.12], ['E7', 0.17], ['A7', 0.23]]) s.bell(noteFreq(n), 0.5, 0.05, d);
+      return;
+    }
     s.noise(0.08, { filter: 'highpass', freq: 3000, vol: 0.26 });
     s.noise(0.45, { filter: 'bandpass', freq: 2600, slide: 900, q: 1.2, vol: 0.14, delay: 0.02 });
     for (let i = 0; i < 6; i++) s.bell(2300 + Math.random() * 2800, 0.25, 0.028, 0.03 + i * 0.045);
@@ -831,14 +838,25 @@ const SFX = {
     s.bend(1.05, { type: 'sawtooth', pitch: [[0, 118], [0.25, 150], [0.7, 140], [1.05, 96]], vib: 5, depth: 3, cutoff: [[0, 260], [0.3, 950], [1.05, 420]], q: 5, vol: 0.055, attack: 0.09, release: 0.4 });
     s.bend(1.05, { type: 'square', pitch: [[0, 59], [0.25, 75], [0.7, 70], [1.05, 48]], cutoff: [[0, 200], [0.3, 500], [1.05, 260]], vol: 0.02, attack: 0.09, release: 0.4 });
   },
-  // a mole popping out of its mound: a rattle of dirt and a cork pop
-  mole: (s) => {
+  // a mole popping out of its mound: a rattle of dirt and a cork pop (a troll: the earth heaves, then a roar)
+  mole: (s, look) => {
+    if (look === 'troll') {
+      s.noise(0.5, { filter: 'lowpass', freq: 420, vol: 0.26 });
+      s.bend(0.95, { type: 'sawtooth', pitch: [[0, 70], [0.2, 118], [0.55, 96], [0.95, 52]], vib: 7, depth: 9, cutoff: [[0, 180], [0.25, 820], [0.95, 240]], q: 4, vol: 0.12, attack: 0.05, release: 0.4, delay: 0.08 });
+      s.bend(0.95, { type: 'square', pitch: [[0, 35], [0.2, 59], [0.55, 48], [0.95, 26]], cutoff: [[0, 150], [0.95, 200]], vol: 0.05, attack: 0.05, release: 0.4, delay: 0.08 });
+      return;
+    }
     s.noise(0.16, { filter: 'lowpass', freq: 700, vol: 0.16 });
     s.tone(260, 0.12, { type: 'sine', slide: 920, vol: 0.22, delay: 0.03 });
     s.tone(1450, 0.05, { type: 'triangle', vol: 0.05, delay: 0.03 });
   },
-  // an anti-gravity bumper: boing!
-  bumper: (s) => {
+  // an anti-gravity bumper: boing! (a toadstool: a softer, squishier one)
+  bumper: (s, look) => {
+    if (look === 'toadstool') {
+      s.bend(0.5, { type: 'sine', pitch: [[0, 120], [0.05, 260], [0.5, 190]], vib: 13, depth: 40, depthEnd: 3, vol: 0.11, attack: 0.004, release: 0.4 });
+      s.noise(0.08, { filter: 'lowpass', freq: 900, vol: 0.08 });
+      return;
+    }
     s.bend(0.55, { type: 'sine', pitch: [[0, 150], [0.05, 340], [0.55, 300]], vib: 19, depth: 70, depthEnd: 4, vol: 0.1, attack: 0.004, release: 0.45 });
     s.tone(1800, 0.12, { type: 'triangle', slide: 900, vol: 0.05 });
   },

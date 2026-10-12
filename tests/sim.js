@@ -602,6 +602,16 @@ function run(race, secs, fn) {
   check('a slalom pole is solid', !r.past && !r.has('hit'));
   r = tryHazard({ kind: 'thorn', d: 0 }, 1.5, true);
   check('a thorn hedge is solid', !r.past && !r.has('hit'));
+  // Fable Fair's dream lap: a troll in its mound is a mole with a bigger reach (the radius comes
+  // from the course), a toadstool a bumper with a radius of its own, and a falling star an icicle
+  // that hangs high in the sky and takes about a second to come down
+  r = tryHazard({ kind: 'mole', look: 'troll', r: 2.2, d: 0, period: 4.4 }, 5, false, 2.8);
+  const molehill = tryHazard({ kind: 'mole', d: 0, period: 4.4 }, 5, false, 2.8);
+  check('a troll in its mound reaches further than a mole', r.has('mole') && r.hit('mole') && !molehill.hit('mole'), `troll hit ${r.hit('mole')}, mole hit ${molehill.hit('mole')} (a kart 2.8 units off its middle)`);
+  r = tryHazard({ kind: 'bumper', look: 'toadstool', r: 1.7, d: 0 }, 1.2, true);
+  check('a toadstool bounces a kart back, like a bumper', r.has('bumper') && r.minAlong < -5, `bounced back at ${(-r.minAlong).toFixed(1)}`);
+  r = tryHazard({ kind: 'icicle', look: 'star', d: 0, period: 5.6, ceil: 16 }, 6.2, false);
+  check('a falling star drops from the sky onto a kart under it', r.has('icicle') && r.hit('icicle'), `${r.ev.filter((e) => e.type === 'icicle').length} landed`);
   // Fable Fair's hazards: a water jet shoves (never spins) a kart away from its wall, on a steady
   // beat that gurgles first; a talking tree chatters before its acorns land
   let jet = tryHazard({ kind: 'jet', d: -11, period: 3.2 }, 3.4, false);
@@ -1033,6 +1043,28 @@ function run(race, secs, fn) {
   const t = race.brains[0].target;
   const aheadBy = (t.x - k.x) * Math.cos(k.head) + (t.z - k.z) * Math.sin(k.head);
   check('fablefair: a bot past the Rabbit Hole\'s end aims ahead of itself', k.loc.path === b && k.loc.over > 15 && aheadBy > 12, `on ${k.loc.path.id}, ${k.loc.over.toFixed(0)} past its end, aim point ${aheadBy.toFixed(1)} units ahead`);
+}
+
+// Fable Fair's last lap is the longest, and the road never runs back close to itself (the scenery of
+// two stretches would overlap, and a kart could see straight across to the other).
+{
+  const F = getTrack('fablefair'), p = F.main;
+  const starts = F.sections.map((sec) => sec.s), ends = starts.slice(1).concat([F.finishS]);
+  const laps = starts.map((a, i) => ends[i] - a);
+  check('fablefair: the Dream Skyway is the longest lap, over 1500 units', laps[2] > 1500 && laps[2] > laps[0] && laps[2] > laps[1], `laps ${laps.map((l) => l.toFixed(0)).join(' / ')} units`);
+  let closest = Infinity, at1 = 0, at2 = 0;
+  for (let i = 0; i < p.n; i += 2) {
+    for (let j = i + 40; j < p.n; j += 2) {
+      if (p.s[j] - p.s[i] < 100) continue;
+      const d = Math.hypot(p.x[i] - p.x[j], p.z[i] - p.z[j]);
+      if (d < closest && Math.abs(p.y[i] - p.y[j]) < 14) {
+        closest = d;
+        at1 = p.s[i];
+        at2 = p.s[j];
+      }
+    }
+  }
+  check('fablefair: the road never comes within 40 units of itself', closest >= 40, `closest ${closest.toFixed(1)} units, s ${at1.toFixed(0)} against s ${at2.toFixed(0)}`);
 }
 
 // Every song is well-formed: whole bars, lines of one length, drum patterns the length of the bar,

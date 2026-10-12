@@ -6,8 +6,12 @@
 //           and the sleeping castle behind its thorn hedges. The Rabbit Hole is the hidden route.
 //   Lap 2 - Desert Mirage: bazaars and domes, then three rides: the water-jet canyon, the
 //           rollercoaster road and the Flying Dutchman, a ghost ship ending in a plunge.
-//   Lap 3 - Dream Skyway: a night-sky lap along lavender clouds: the climb, an anti-gravity
-//           spiral around the moon, the glider leap over the Milky Way and the finish.
+//   Lap 3 - Dream Skyway: a night flight through an elf realm, in the scenes of a dark ride:
+//           Lantern Castles (a bay of floating castles), the castle gate hall, the Elf Wood
+//           (elves, toadstool bumpers), the Moonflower Garden (falling stars), the star stairs
+//           and the star tunnel, the Stardust Spiral round the Moon, the glider leap over the
+//           Milky Way, the castle courtyard and Troll Hollow (trolls in their mounds), then a
+//           swooping descent to the Elf King's castle and the finish.
 // See js/tracks.js for the placement conventions. The road is written with named segments (at.*)
 // so every placement below refers to a place, not a number.
 //
@@ -96,12 +100,44 @@
   add('poolRun', { s: 100 });
 
   // ---------------------------------------------------------------- lap 3: Dream Skyway
+  // A night-sky flight through an elf realm, in the scenes of a dark ride: a bay of floating
+  // castles, a gate hall, the Elf Wood, the Moonflower Garden, then up the star stairs, through the
+  // star tunnel, round the Moon and over the Milky Way, and down through Troll Hollow in a spiral.
+  style = 'cloud';
+  look = 'parapet';
+  deck = false;
+  add('plaza', { s: 60, y: -10, hw: 9 });
+  // Lantern Castles: the road winds through a bay of floating castles
+  add('bayRun', { s: 30, y: -9 });
+  add('bayL', { l: 55, rad: 52, y: -8, bank: 8 });
+  add('bayMid', { s: 24, y: -7 });
+  add('bayR', { r: 60, rad: 52, y: -6, bank: 8 });
+  add('bayOut', { s: 30, y: -5 });
+  add('gateHall', { s: 50, y: -5, style: 'flagstone' }); // through a castle's gate hall
+  // the Elf Wood
+  style = 'elfpath';
+  look = 'glowhedge';
+  add('woodA', { s: 24, y: -4 });
+  add('woodB', { r: 45, rad: 50, y: -3, bank: 8 });
+  add('woodC', { l: 55, rad: 46, y: -1, bank: 10 });
+  add('woodD', { s: 30, y: -1 }); // the elves' dancing ring
+  add('woodE', { r: 50, rad: 48, y: 0, bank: 8 });
+  add('woodF', { l: 45, rad: 52, y: 1 });
+  add('woodG', { s: 22, y: 1 });
+  // the Moonflower Garden
+  style = 'petal';
+  look = 'bloomhedge';
+  add('gardenA', { s: 36, y: 2, hw: 9.5 });
+  add('gardenB', { r: 55, rad: 56, y: 3, bank: 6 });
+  add('gardenC', { s: 30, y: 4 });
+  add('gardenD', { l: 55, rad: 56, y: 5 });
+  // up the star stairs, through the star tunnel
   style = 'cloud';
   look = '';
-  add('plaza', { s: 60, y: -10, hw: 9 });
   deck = true;
-  add('climbBend', { r: 60, rad: 36, y: -4, bank: 10 });
-  add('stairway', { s: 110, y: 22 });
+  add('climbBend', { r: 50, rad: 40, y: 8, bank: 10 });
+  add('stairway', { s: 100, y: 30, style: 'stairs' });
+  add('starTunnel', { s: 70, y: 31, style: 'starroad' });
   // the Stardust Spiral: anti-gravity road winding up around the moon
   add('spiralA', { l: 190, rad: 32, y: 40, bank: 50, antigrav: true, style: 'metal', hw: 9 });
   add('spiralB', { r: 100, rad: 36, y: 40, bank: 40, antigrav: true, style: 'metal' });
@@ -109,16 +145,29 @@
   add('glideRamp', { s: 40, y: 40, hw: 8 });
   add('glide', { s: 100, y: 32, wallL: false, wallR: false });
   add('landing', { s: 80, y: 25, wallL: true, wallR: true });
+  add('court', { s: 40, y: 25, style: 'flagstone', look: 'parapet' }); // a castle's courtyard
+  // Troll Hollow
+  style = 'flagstone';
+  look = 'trollrock';
   deck = false;
-  add('afterBend', { r: 90, rad: 34, y: 22, bank: 10 });
-  add('finishRun', { s: 150, y: 20 });
+  add('hollowA', { s: 30, y: 24 });
+  add('hollowB', { r: 50, rad: 50, y: 22, bank: 8 });
+  add('hollowC', { s: 40, y: 21 }); // under the troll bridge
+  add('hollowD', { l: 55, rad: 46, y: 19, bank: 8 });
+  add('hollowE', { s: 26, y: 18 });
+  // and down, in a swooping S, to the finish at the Elf King's castle
+  add('dropA', { r: 60, rad: 44, y: 12, bank: 14 });
+  add('dropB', { l: 75, rad: 40, y: 7, bank: 14 });
+  look = 'parapet';
+  style = 'cloud';
+  add('finishRun', { s: 80, y: 6 });
 
   TRACK_DEFS.push({
     id: 'fablefair',
     name: 'Fable Fair',
-    blurb: 'A fairy-tale fair in the clouds in three laps: an enchanted forest, a desert of rides and a night-sky dream.',
+    blurb: 'A fairy-tale fair in the clouds in three laps: an enchanted forest, a desert of rides and a night-sky dream of elves, trolls and castles.',
     music: 'fable1',
-    staff: { 150: 92.6, 200: 79.7 },
+    staff: { 150: 123.0, 200: 104.6 },
     difficulty: 3,
     theme: 'fairy',
     p2p: true,
@@ -161,19 +210,33 @@
       { kind: 'hump', seg: at.bowLip, t: 0.45, len: 8, d: 0, w: 30, h: 1.0 },
       // a pad on the way out of the pool
       { kind: 'boost', seg: at.poolRun, t: 0.72, len: 6, d: 0, w: 6 },
-      // Lap 3: pads up the stairway and round the spiral, and one after the landing
-      { kind: 'boost', seg: at.stairway, t: 0.3, len: 6, d: 0, w: 5 },
-      { kind: 'boost', seg: at.stairway, t: 0.7, len: 6, d: 3.5, w: 4 },
-      { kind: 'boost', seg: at.spiralA, t: 0.5, len: 8, d: 3.5, w: 4 },
-      { kind: 'boost', seg: at.spiralB, t: 0.5, len: 8, d: -3.5, w: 4 },
-      { kind: 'boost', seg: at.landing, t: 0.5, len: 6, d: 0, w: 6 },
+      // Lap 3: stardust pads, a few to a scene: through the bay and the gate hall, down the Elf Wood
+      // and the garden, up the star stairs and the tunnel, round the spiral, after the landing and
+      // down through Troll Hollow
+      { kind: 'boost', look: 'stardust', seg: at.bayL, t: 0.5, len: 6, d: -3, w: 5 },
+      { kind: 'boost', look: 'stardust', seg: at.gateHall, t: 0.5, len: 7, d: 0, w: 6 },
+      { kind: 'boost', look: 'stardust', seg: at.woodC, t: 0.55, len: 6, d: 3.5, w: 4.5 },
+      { kind: 'boost', look: 'stardust', seg: at.woodF, t: 0.5, len: 6, d: -3.5, w: 4.5 },
+      { kind: 'boost', look: 'stardust', seg: at.gardenB, t: 0.5, len: 6, d: 0, w: 5 },
+      { kind: 'boost', look: 'stardust', seg: at.stairway, t: 0.3, len: 6, d: 0, w: 5 },
+      { kind: 'boost', look: 'stardust', seg: at.stairway, t: 0.7, len: 6, d: 3.5, w: 4 },
+      { kind: 'boost', look: 'stardust', seg: at.starTunnel, t: 0.5, len: 8, d: 0, w: 7 },
+      { kind: 'boost', look: 'stardust', seg: at.spiralA, t: 0.5, len: 8, d: 3.5, w: 4 },
+      { kind: 'boost', look: 'stardust', seg: at.spiralB, t: 0.5, len: 8, d: -3.5, w: 4 },
+      { kind: 'boost', look: 'stardust', seg: at.landing, t: 0.5, len: 6, d: 0, w: 6 },
+      { kind: 'boost', look: 'stardust', seg: at.hollowD, t: 0.5, len: 6, d: 0, w: 5 },
+      { kind: 'boost', look: 'stardust', seg: at.dropB, t: 0.5, len: 6, d: 0, w: 5 },
       // the glider chasm (see the note at the top)
       { kind: 'boost', seg: at.glideRamp, t: 0.12, len: 7, d: 0, w: 26 },
       { kind: 'glide', seg: at.glideRamp, t: 0.5, len: 10, d: 0, w: 30, h: 1.4 },
       { kind: 'gap', seg: at.glideRamp, t: 0.75, len: 107, d: 0, w: 80 },
     ],
-    // three rings on the glider's arc (it sinks the same way at any speed: heights from the sim)
+    // three rings in the star tunnel, then three on the glider's arc (it sinks the same way at any
+    // speed: heights from the sim)
     rings: [
+      { seg: at.starTunnel, t: 0.2, d: 0, h: 2.6, r: 3.6 },
+      { seg: at.starTunnel, t: 0.6, d: 0, h: 2.6, r: 3.6 },
+      { seg: at.starTunnel, t: 0.92, d: 0, h: 2.6, r: 3.6 },
       { seg: at.glide, t: 0.15, d: 0, h: 6.6, r: 4 },
       { seg: at.glide, t: 0.4, d: 0, h: 8.8, r: 4 },
       { seg: at.glide, t: 0.7, d: 0, h: 7, r: 4 },
@@ -191,9 +254,14 @@
       { seg: at.harbor, t: 0.5, d: [-6, -2, 2, 6] },
       { seg: at.poolRun, t: 0.5, d: [-6, -2, 2, 6] },
       { seg: at.plaza, t: 0.5, d: [-6, -2, 2, 6] },
+      { seg: at.bayMid, t: 0.5, d: [-6, -2, 2, 6] },
+      { seg: at.woodD, t: 0.5, d: [-5.5, -1.8, 1.8, 5.5] },
+      { seg: at.gardenC, t: 0.5, d: [-6, -2, 2, 6] },
       { seg: at.stairway, t: 0.5, d: [-6, -2, 2, 6] },
       { seg: at.spiralB, t: 0.6, d: [-5, -1.7, 1.7, 5] },
       { seg: at.landing, t: 0.6, d: [-6, -2, 2, 6] },
+      { seg: at.hollowC, t: 0.5, d: [-6, -2, 2, 6] },
+      { seg: at.dropB, t: 0.75, d: [-5, -1.7, 1.7, 5] },
       { seg: at.finishRun, t: 0.1, d: [-6, -2, 2, 6] },
       { path: 'burrow', u: 0.42, d: [-2.2, 2.2] },
     ],
@@ -207,9 +275,18 @@
       { seg: at.hill2, t: 0.15, d: -3, n: 7, gap: 3.5 },
       { seg: at.hill3, t: 0.15, d: 3, n: 7, gap: 3.5 },
       { seg: at.canyon3, t: 0.1, d: 0, n: 10, gap: 5 },
+      { seg: at.bayRun, t: 0.2, d: 3, n: 6, gap: 3 },
+      { seg: at.bayR, t: 0.25, d: -3, n: 6, gap: 3.5 },
+      { seg: at.woodB, t: 0.2, d: -2, n: 6, gap: 3.5 },
+      { seg: at.woodE, t: 0.2, d: 2, n: 7, gap: 3.5 },
+      { seg: at.gardenA, t: 0.2, d: 3, n: 6, gap: 3 },
+      { seg: at.gardenD, t: 0.2, d: -3, n: 8, gap: 3.5 },
       { seg: at.stairway, t: 0.3, d: 3, n: 6, gap: 3 },
+      { seg: at.starTunnel, t: 0.08, d: 0, n: 10, gap: 5.5 },
       { seg: at.spiralA, t: 0.15, d: 0, n: 12, gap: 6 },
       { seg: at.spiralB, t: 0.2, d: 0, n: 8, gap: 6 },
+      { seg: at.hollowB, t: 0.2, d: -2, n: 7, gap: 3.5 },
+      { seg: at.dropA, t: 0.2, d: 0, n: 8, gap: 4.5 },
       { seg: at.finishRun, t: 0.2, d: 0, n: 6, gap: 3 },
       { path: 'burrow', u: 0.62, d: 0, n: 8, gap: 2.5 },
     ],
@@ -223,15 +300,29 @@
         [at.canyon3, 0.2, 1], [at.canyon3, 0.55, -1], [at.canyon3, 0.9, 1], [at.canyon4, 0.5, -1],
         [at.canyon5, 0.2, 1], [at.canyon5, 0.55, -1], [at.canyon5, 0.9, 1], [at.canyon6, 0.5, -1],
       ].map(([seg, t, side], k) => ({ kind: 'jet', seg, t, d: side * 11.6, period: 3.2, phase: (k * 0.37) % 1 })),
-      // Lap 3: star bumpers on the spiral (on anti-gravity road a bump throws a spin boost) and
-      // little moons rolling across the way home
+      // Lap 3: toadstools bounce a kart about the Elf Wood, falling stars land on the garden and the
+      // star stairs (a star hangs high up and shivers for a second before it drops), star bumpers
+      // stand on the spiral (on anti-gravity road a bump throws a spin boost), the trolls of Troll
+      // Hollow pop up out of their mounds and little moons roll across the way home
+      { kind: 'bumper', look: 'toadstool', seg: at.woodB, t: 0.55, d: 3.8, r: 1.7 },
+      { kind: 'bumper', look: 'toadstool', seg: at.woodC, t: 0.3, d: -3.8, r: 1.7 },
+      { kind: 'bumper', look: 'toadstool', seg: at.woodE, t: 0.55, d: 3.8, r: 1.7 },
+      { kind: 'bumper', look: 'toadstool', seg: at.woodF, t: 0.25, d: -3.8, r: 1.7 },
+      { kind: 'icicle', look: 'star', seg: at.gardenB, t: 0.3, d: 3, period: 5.6, phase: 0, ceil: 16 },
+      { kind: 'icicle', look: 'star', seg: at.gardenD, t: 0.5, d: -3, period: 5.6, phase: 0.5, ceil: 16 },
+      { kind: 'icicle', look: 'star', seg: at.stairway, t: 0.45, d: -3, period: 5.6, phase: 0.25, ceil: 16 },
+      { kind: 'icicle', look: 'star', seg: at.stairway, t: 0.88, d: 3, period: 5.6, phase: 0.75, ceil: 16 },
       { kind: 'bumper', seg: at.spiralA, t: 0.2, d: -5 },
       { kind: 'bumper', seg: at.spiralA, t: 0.45, d: 5 },
       { kind: 'bumper', seg: at.spiralA, t: 0.7, d: -5 },
       { kind: 'bumper', seg: at.spiralB, t: 0.4, d: 5 },
-      { kind: 'roller', seg: at.afterBend, t: 0.5, d: 0, range: 12, period: 4.4, r: 2.2, look: 'moon' },
-      { kind: 'roller', seg: at.finishRun, t: 0.3, d: 0, range: 12, period: 4, r: 2.2, phase: 0.5, look: 'moon' },
-      { kind: 'roller', seg: at.finishRun, t: 0.65, d: 0, range: 12, period: 4.6, r: 2.2, phase: 0.2, look: 'moon' },
+      { kind: 'mole', look: 'troll', seg: at.hollowA, t: 0.6, d: -4.5, r: 2.2, period: 4.4, phase: 0 },
+      { kind: 'mole', look: 'troll', seg: at.hollowB, t: 0.3, d: 4.5, r: 2.2, period: 4.4, phase: 0.5 },
+      { kind: 'mole', look: 'troll', seg: at.hollowB, t: 0.8, d: -3.5, r: 2.2, period: 4.4, phase: 0.15 },
+      { kind: 'mole', look: 'troll', seg: at.hollowC, t: 0.45, d: 3.5, r: 2.2, period: 4.4, phase: 0.65 },
+      { kind: 'mole', look: 'troll', seg: at.hollowD, t: 0.35, d: -4.5, r: 2.2, period: 4.4, phase: 0.3 },
+      { kind: 'mole', look: 'troll', seg: at.hollowD, t: 0.8, d: 4, r: 2.2, period: 4.4, phase: 0.8 },
+      { kind: 'roller', seg: at.finishRun, t: 0.4, d: 0, range: 12, period: 4.4, r: 2.2, look: 'moon' },
       // Lap 1: the talking tree drops its acorns on two marked spots by the key
       { kind: 'acorntree', seg: at.treeGlade, t: 0.35, d: 16.5, spots: [{ ds: 3, d: -2.5 }, { ds: 11, d: 3.5 }], period: 5, ceil: 8 },
       // the sleeping castle's briars have crept onto the road: each row blocks one half of it
@@ -282,15 +373,55 @@
       { kind: 'bridge', seg: at.gangway, t: 0, seg1: at.shipDeck, t1: 0, look: 'wood' },
       { kind: 'ghostship', seg: at.shipDeck, t: 0, seg1: at.bowLip, t1: 1 },
       { kind: 'splashpool', seg: at.poolRun, t: 0.02 },
-      // Lap 3: the gate, the clouds the road stands on, the sleeping Moon in the middle of the spiral
+      // Lap 3, scene by scene. The gate, the clouds the road stands on, the sleeping Moon in the middle of the spiral:
       { kind: 'ridegate', seg: at.plaza, t: 0.8, look: 'dream', text: 'DREAM SKYWAY', sub: 'SLEEP TIGHT, RACE LIGHT' },
       { kind: 'balloon', seg: at.plaza, t: 0.5, d: -34, h: 26 },
-      { kind: 'cloudpiers', seg: at.climbBend, t: 0, seg1: at.stairway, t1: 1 },
-      { kind: 'moon', seg: at.spiralA, t: 0.5, d: -32, h: 0, r: 16, face: { seg: at.stairway, t: 0.5 }, far: true },
+      { kind: 'cloudpiers', seg: at.climbBend, t: 0, seg1: at.starTunnel, t1: 1 },
+      { kind: 'moon', seg: at.spiralA, t: 0.5, d: -32, h: 0, r: 16, face: { seg: at.starTunnel, t: 0.5 }, far: true },
       { kind: 'ridegate', seg: at.glideRamp, t: 0, look: 'dream', text: 'MILKY WAY LEAP', sub: 'GLIDE!' },
-      { kind: 'cloudpiers', seg: at.landing, t: 0, seg1: at.landing, t1: 1 },
-      { kind: 'balloon', seg: at.afterBend, t: 0.5, d: 36, h: 22 },
+      { kind: 'cloudpiers', seg: at.landing, t: 0, seg1: at.court, t1: 1 },
+      { kind: 'balloon', seg: at.hollowB, t: 0.5, d: 36, h: 22 },
       { kind: 'grandstand', seg: at.finishRun, t: 0.55, d: 1, len: 26 },
+      // Lantern Castles: castles on floating islands round the bay, and strings of paper lanterns over the road
+      { kind: 'castle', seg: at.bayRun, t: 0.4, d: -62, h: 26, s: 3.2, v: 0, island: true },
+      { kind: 'castle', seg: at.bayL, t: 0.5, d: 58, h: 20, s: 4, v: 1, island: true },
+      { kind: 'castle', seg: at.bayMid, t: 0.5, d: -78, h: 36, s: 5, v: 2, island: true },
+      { kind: 'castle', seg: at.bayR, t: 0.5, d: -52, h: 24, s: 3.6, v: 3, island: true },
+      { kind: 'lanterns', seg: at.bayRun, t: 0.1, seg1: at.bayOut, t1: 1, every: 26, start: 4 },
+      // the gate hall: through the castle's gatehouse
+      { kind: 'tunnel', look: 'gatehall', seg: at.gateHall, t: 0.04, seg1: at.gateHall, t1: 0.96 },
+      // the Elf Wood
+      { kind: 'ridegate', seg: at.woodA, t: 0.5, look: 'elf', text: 'ELF WOOD', sub: 'WHERE THE LANTERNS GROW' },
+      { kind: 'elfring', seg: at.woodD, t: 0.5, d: 17, v: 0 },
+      { kind: 'elfhouse', seg: at.woodB, t: 0.5, d: 20, v: 1 },
+      { kind: 'elfhouse', seg: at.woodC, t: 0.5, d: -22, v: 2, pose: 'lantern' },
+      { kind: 'scatter', seg: at.woodA, t: 0, seg1: at.woodG, t1: 1, pieces: ['dreamtree', 'dreamshroom', 'bluebell', 'dreamtree', 'lanternstone'], every: 10, off: [5, 26], seed: 5, figs: [{ kind: 'elf', poses: ['stand', 'wave', 'dance', 'pipe'], every: 26, seed: 2 }] },
+      { kind: 'lanterns', seg: at.woodB, t: 0.3, seg1: at.woodG, t1: 0.8, every: 34, start: 0, sag: 2, cols: ['#ffb347', '#7fe0d0', '#ff8ac8'] },
+      // the Moonflower Garden
+      { kind: 'ridegate', seg: at.gardenA, t: 0.1, look: 'garden', text: 'MOON GARDEN', sub: 'WATCH FOR FALLING STARS' },
+      { kind: 'flowerarch', seg: at.gardenA, t: 0.6, look: 'rose' },
+      { kind: 'fountain', seg: at.gardenB, t: 0.5, d: 40 },
+      { kind: 'flowerarch', seg: at.gardenC, t: 0.5, look: 'moon' },
+      { kind: 'flowerarch', seg: at.gardenD, t: 0.9, look: 'rose' },
+      { kind: 'scatter', seg: at.gardenA, t: 0, seg1: at.gardenD, t1: 1, pieces: ['moonflower', 'moonflower', 'bluebell', 'dreamshroom', 'lanternstone', 'starpost'], every: 9, off: [4, 24], seed: 8, figs: [{ kind: 'elf', poses: ['stand', 'wave', 'dance'], every: 30, seed: 4 }] },
+      // the star stairs and the star tunnel
+      { kind: 'ridegate', seg: at.climbBend, t: 0.6, look: 'stairs', text: 'STAR STAIRS', sub: 'MIND YOUR STEP' },
+      { kind: 'tunnel', look: 'stars', seg: at.starTunnel, t: 0.03, seg1: at.starTunnel, t1: 0.97 },
+      // the Milky Way under the glider leap, the castle courtyard after it
+      { kind: 'milkyway', seg: at.glideRamp, t: 0.2, seg1: at.landing, t1: 0.9 },
+      { kind: 'castle', seg: at.court, t: 0.5, d: -50, h: 2, s: 3.6, v: 4, island: true },
+      { kind: 'castle', seg: at.court, t: 0.5, d: 52, h: 4, s: 3.2, v: 5, island: true },
+      // Troll Hollow
+      { kind: 'ridegate', seg: at.hollowA, t: 0.15, look: 'troll', text: 'TROLL HOLLOW', sub: 'TOLL: ONE SMILE' },
+      { kind: 'troll', seg: at.hollowA, t: 0.5, d: 14, pose: 'sit', v: 0, s: 1 },
+      { kind: 'troll', seg: at.hollowB, t: 0.5, d: -14, pose: 'sleep', v: 1, s: 1 },
+      { kind: 'trollbridge', seg: at.hollowC, t: 0.5, v: 1 },
+      { kind: 'troll', seg: at.hollowC, t: 0.3, d: 15, pose: 'wave', v: 2, s: 1 },
+      { kind: 'trollpeek', seg: at.hollowD, t: 0.3, d: -13, v: 3, s: 1 },
+      { kind: 'scatter', seg: at.hollowA, t: 0, seg1: at.hollowE, t1: 1, pieces: ['mossrock', 'mossrock', 'dreamshroom', 'reeds', 'lanternstone', 'dreamtree'], every: 10, off: [4, 22], seed: 11, figs: [{ kind: 'troll', poses: ['stand', 'sit', 'wave'], every: 50, seed: 6, off: [7, 15] }] },
+      { kind: 'wisps', seg: at.hollowA, t: 0, seg1: at.hollowE, t1: 1, n: 16, seed: 3 },
+      // the Elf King's castle at the end of the road
+      { kind: 'castle', seg: at.finishRun, t: 1, ds: 110, d: 0, h: -4, s: 8.5, v: 6, island: true },
     ],
   });
 })();

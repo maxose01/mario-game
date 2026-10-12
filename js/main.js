@@ -636,16 +636,16 @@ const App = {
           if (mine || this.near(e.a, 40)) Sound.play('moo');
           break;
         case 'bumper':
-          if (mine || this.near(e.a, 30)) Sound.play('bumper');
+          if (mine || this.near(e.a, 30)) Sound.play('bumper', e.a && e.a.look);
           break;
         case 'mole':
-          if (this.near(e.a, 35)) Sound.play('mole');
+          if (this.near(e.a, 35)) Sound.play('mole', e.a.look);
           break;
         case 'geyser':
           if (this.near(e.a, 45)) Sound.play('geyser', e.a.look);
           break;
         case 'icicle':
-          if (this.near(e.a, 40)) Sound.play('icicle');
+          if (this.near(e.a, 40)) Sound.play('icicle', e.a.look);
           break;
         case 'jetwarn':
           if (this.near(e.a, 45)) Sound.play('jetwarn');

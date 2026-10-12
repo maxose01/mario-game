@@ -367,7 +367,7 @@ class RaceFX {
       GK.at(GK.cyl(0.55, 0.55, 0.16, '#ffcf40', { segs: 18, lump: 0.01 }), 0, 0, 0, Math.PI / 2),
       GK.at(GK.box(0.12, 0.5, 0.2, '#ffe680', { lump: 0, r: 0.05 }), 0, 0, 0),
     ]);
-    const mat = Clay3D.material({ vertexColors: true, metal: 0.35, rough: 0.35, emissive: 0x5a3c00, emissiveIntensity: 0.6, wobble: 0.02 });
+    const mat = Clay3D.material({ vertexColors: true, metal: 0.35, rough: 0.35, emissive: 0x7a5200, emissiveIntensity: 0.8, wobble: 0.02 });
     this.coinMesh = new THREE.InstancedMesh(geo, mat, coins.length);
     this.coinMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.coinMesh.frustumCulled = false;
@@ -508,7 +508,13 @@ class RaceFX {
   }
   updateRings(time, dt) {
     const amt = CFG.particles, glow = CFG.glow !== undefined ? CFG.glow : 1;
+    // a ring far from every kart is out in the haze: leave it out (a long course has many)
+    const reach = 360 * Math.max(1, CFG.drawDist || 1), draw = reach * reach;
     for (const rm of this.ringMeshes) {
+      let best = Infinity;
+      for (const k of this.race.karts) best = Math.min(best, (k.x - rm.r.x) ** 2 + (k.z - rm.r.z) ** 2);
+      rm.group.visible = best < draw;
+      if (!rm.group.visible) continue;
       const f = U.clamp(rm.r.flash || 0, 0, 1);
       // flies through: the ring swells, burns white-hot and its chaser lights race round
       rm.unit.scale.setScalar(rm.R * (1 + 0.16 * f * f + Math.sin(time * 2.2 + rm.r.id) * 0.012));
@@ -962,8 +968,10 @@ class RaceFX {
         break;
       case 'icicle':
         if (e.a) {
-          this.burst(this.clay, e.a.x, e.a.y + 0.4, e.a.z, 22, ['#dff3ff', '#ffffff', '#9fd8ff'], 8, 0.3, 0.8, 16);
-          this.burst(this.glow, e.a.x, e.a.y + 0.6, e.a.z, 10, ['#ffffff', '#bfeaff'], 5, 0.12, 0.4, 6);
+          // (a falling star bursts into gold and lilac sparkles)
+          const star = e.a.look === 'star';
+          this.burst(this.clay, e.a.x, e.a.y + 0.4, e.a.z, 22, star ? ['#fff3b0', '#ffd166', '#cdb8ff'] : ['#dff3ff', '#ffffff', '#9fd8ff'], 8, 0.3, 0.8, 16);
+          this.burst(this.glow, e.a.x, e.a.y + 0.6, e.a.z, star ? 18 : 10, star ? ['#ffffff', '#ffe08a', '#d9c8ff'] : ['#ffffff', '#bfeaff'], 5, 0.12, 0.4, 6);
         }
         break;
       case 'acorn':
@@ -2053,7 +2061,7 @@ const RING_BULB_GEO = memo(() => {
   const P = [];
   for (let i = 0; i < 20; i++) {
     const a = (i / 20) * TAU;
-    for (const z of [-0.085, 0.085]) P.push(GK.at(GK.blob(0.04, 0.04, 0.03, '#ffffff', { seed: 702, lump: 0 }), Math.cos(a) * 1.0, Math.sin(a) * 1.0, z));
+    for (const z of [-0.085, 0.085]) P.push(GK.at(GK.blob(0.04, 0.04, 0.03, '#ffffff', { seed: 702, lump: 0, ws: 6, hs: 4 }), Math.cos(a) * 1.0, Math.sin(a) * 1.0, z));
   }
   return GK.merge(P).rotateY(Math.PI / 2);
 });

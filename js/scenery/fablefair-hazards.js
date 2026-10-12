@@ -322,3 +322,171 @@
     },
   });
 })();
+
+// ---- looks for hazards that exist already (js/fx3d.js), for the dream lap: a troll in its mound (mole, look
+// 'troll'), a falling star (icicle, look 'star') and a bouncy toadstool (bumper, look 'toadstool')
+(() => {
+  const at = GK.at.bind(GK);
+  const PI = Math.PI;
+
+  // ---- a troll's mound (hit radius 2.2): a mossy hump with ferns, stones and glowing toadstools, a dark hole on top
+  const TROLL_MOUND_GEO = memo(() => {
+    const P = [GK.blob(3.2, 1.4, 3.2, '#55805e', { seed: 901, lump: 0.3, vary: 0.08, ws: 12, hs: 7 })];
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * TAU + 0.2, r = 2.9 + (i % 2) * 0.3, sz = 0.45 + (i % 3) * 0.2;
+      P.push(at(GK.blob(sz, sz * 0.7, sz * 0.9, i % 2 ? '#7a7690' : '#8a86a2', { seed: 910 + i, lump: 0.1 }), Math.cos(a) * r, sz * 0.3, Math.sin(a) * r));
+    }
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * TAU + 0.7, r = 2.3;
+      P.push(at(GK.blob(1.0, 0.1, 0.22, '#58b87a', { seed: 930 + i, ws: 6, hs: 4 }), Math.cos(a) * r, 0.95, Math.sin(a) * r, 0, -a, 0.5));
+    }
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * TAU + 0.3, r = 2.6;
+      P.push(at(GK.cyl(0.07, 0.1, 0.4, '#f4ecd8', { segs: 5, hsegs: 1, lump: 0, seed: 940 + i }), Math.cos(a) * r, 0.9, Math.sin(a) * r));
+      P.push(at(GK.blob(0.3, 0.17, 0.3, ['#e0589a', '#7a5ad8', '#3fc8b0', '#ffb347'][i], { seed: 950 + i, ws: 6, hs: 4 }), Math.cos(a) * r, 1.2, Math.sin(a) * r));
+    }
+    P.push(at(GK.blob(1.75, 0.16, 1.75, '#241a30', { seed: 960, lump: 0.04, ws: 10, hs: 4 }), 0, 1.3, 0));
+    return GK.merge(P);
+  });
+
+  const moleFx = HAZARD_FX.mole, bumperFx = HAZARD_FX.bumper;
+  HAZARD_FX.mole = Object.assign({}, moleFx, {
+    build(fx, h, hm) {
+      if (h.look !== 'troll') return moleFx.build(fx, h, hm);
+      hm.troll = true;
+      const body = new THREE.Group();
+      body.scale.setScalar((h.r || 2.2) / 2.2);
+      hm.mound = new THREE.Mesh(TROLL_MOUND_GEO(), fx.mats.clay);
+      body.add(hm.mound);
+      const t = new THREE.Group();
+      t.add(new THREE.Mesh(FableKit.trollBust(h.id % 4), fx.mats.clay));
+      for (const side of [-1, 1]) {
+        const eye = fx.glowSprite(0xffe36a, 1.7); // eyes that shine in the dark
+        eye.position.set(2.0, 5.95, side * 0.55);
+        t.add(eye);
+      }
+      body.add(t);
+      hm.mole = t;
+      return body;
+    },
+    update(fx, hm, h, time, dt) {
+      if (!hm.troll) return moleFx.update(fx, hm, h, time, dt);
+      const up = U.clamp(h.up || 0, 0, 1);
+      hm.mole.visible = up > 0.01;
+      // it heaves itself up out of the hole, roars at the karts coming (faces down the road) and sinks back
+      hm.mole.position.y = -6.9 + 6.9 * U.easeOutBack(up);
+      hm.mole.rotation.y = PI + Math.sin(time * 1.7 + h.id) * 0.3 * up;
+      hm.mole.rotation.z = Math.sin(time * 9 + h.id) * 0.05 * up;
+      // the earth heaves and cracks before it comes
+      const j = h.warn ? 0.2 : 0;
+      hm.mound.position.set((U.hash(Math.floor(time * 24) + h.id * 7) - 0.5) * j, 0, (U.hash(Math.floor(time * 24) + h.id * 7 + 99) - 0.5) * j);
+      hm.mound.scale.set(1, h.warn ? 1 + Math.sin(time * 27) * 0.09 : 1, 1);
+      if (h.warn && hm.near && Math.random() < 0.5 * CFG.particles) {
+        const a = Math.random() * TAU;
+        fx.clay.spawn(h.x + Math.cos(a) * 1.4, h.y + 1.2, h.z + Math.sin(a) * 1.4, Math.cos(a) * 2, 3 + Math.random() * 3, Math.sin(a) * 2, 0.16 + Math.random() * 0.12, Math.random() < 0.5 ? '#55805e' : '#8a86a2', 0.7, 14, 1, 0);
+      }
+    },
+    bits: (h) => (h.look === 'troll' ? ['#7d9378', '#55805e', '#ffe36a'] : moleFx.bits(h)),
+  });
+
+  // ---- a falling star (icicle, look 'star'): hangs high in the night sky, trembles and flashes, drops and bursts
+  const FALL_STAR_GEO = memo(() => FableKit.star(1.5, '#ffd166', 1000));
+  const icicleFx = HAZARD_FX.icicle;
+  HAZARD_FX.icicle = Object.assign({}, icicleFx, {
+    build(fx, h, hm) {
+      if (h.look !== 'star') return icicleFx.build(fx, h, hm);
+      hm.starry = true;
+      const body = new THREE.Group();
+      hm.spike = new THREE.Group();
+      hm.spin = new THREE.Mesh(FALL_STAR_GEO(), fx.mats.glowClay); // unlit: it shines in the dark
+      hm.spike.add(hm.spin);
+      hm.glow = fx.glowSprite(0xffe08a, 11);
+      hm.spike.add(hm.glow);
+      body.add(hm.spike);
+      // its shadow on the road, darker and bigger as it comes down
+      const flat = new THREE.Group();
+      if (hm.frameQ) flat.quaternion.copy(hm.mesh.quaternion).invert().multiply(hm.frameQ);
+      hm.shade = new THREE.Mesh(ICICLE_SHADE_GEO(), new THREE.MeshBasicMaterial({ map: KartModels.shadowTexture(), transparent: true, opacity: 0, depthWrite: false, fog: true }));
+      hm.shade.position.y = 0.1;
+      hm.shade.renderOrder = 1;
+      flat.add(hm.shade);
+      body.add(flat);
+      return body;
+    },
+    update(fx, hm, h, time, dt) {
+      if (!hm.starry) return icicleFx.update(fx, hm, h, time, dt);
+      const ceil = h.ceil !== undefined ? h.ceil : 9, hang = ceil - ICICLE_LEN;
+      const st = h.state || 'hang';
+      const gone = st === 'gone' || h.alive === false;
+      const g = U.clamp(h.grow !== undefined ? h.grow : 1, 0, 1);
+      const drop = h.drop !== undefined ? h.drop : hang;
+      hm.spike.visible = !gone && g > 0.02;
+      hm.spike.position.set(0, drop + 1.5, 0);
+      hm.spike.scale.setScalar(0.35 + 0.65 * g);
+      // it spins lazily, then faster as it trembles and plummets
+      hm.spin.rotation.y = time * (st === 'fall' ? 7 : st === 'warn' ? 3.5 : 0.9) + h.id;
+      hm.spin.rotation.z = st === 'fall' ? time * 4 : Math.sin(time * 0.8 + h.id) * 0.2;
+      if (st === 'warn') {
+        const q = Math.floor(time * 30);
+        hm.spike.position.x = (U.hash(q + h.id * 13) - 0.5) * 0.35;
+        hm.spike.position.z = (U.hash(q + h.id * 13 + 50) - 0.5) * 0.35;
+      } else {
+        hm.spike.position.x = 0;
+        hm.spike.position.z = 0;
+      }
+      const gl = CFG.glow !== undefined ? CFG.glow : 1;
+      const flash = st === 'warn' ? 0.5 + 0.45 * Math.sin(time * 26) : st === 'fall' ? 1 : 0.5 + 0.12 * Math.sin(time * 2.4 + h.id);
+      hm.glow.material.opacity = gl * (gone ? 0 : flash);
+      hm.glow.scale.setScalar(st === 'fall' ? 15 : 11 + (st === 'warn' ? 2.5 : 0));
+      // a comet's tail while it falls
+      if (st === 'fall' && dt > 0 && Math.random() < 0.9 * CFG.particles) {
+        fx.glow.spawn(h.x + (Math.random() - 0.5) * 0.8, h.y + drop + 1.5 + Math.random() * 2, h.z + (Math.random() - 0.5) * 0.8, 0, 2, 0, 0.18 + Math.random() * 0.12, Math.random() < 0.5 ? '#fff3b0' : '#cdb8ff', 0.6, 0, 1);
+      }
+      const fall = st === 'fall' ? 1 - U.clamp(drop / hang, 0, 1) : 0;
+      hm.shade.material.opacity = st === 'warn' ? 0.28 + 0.14 * Math.sin(time * 18) : st === 'fall' ? 0.35 + 0.55 * fall : st === 'hang' ? 0.12 : 0;
+      hm.shade.scale.setScalar(0.8 + 0.9 * fall + (st === 'warn' ? 0.15 : 0));
+    },
+    bits: (h) => (h.look === 'star' ? ['#fff3b0', '#ffd166', '#cdb8ff'] : icicleFx.bits(h)),
+  });
+
+  // ---- a bouncy toadstool (r = 1.3, scaled): a cream stem and a big spotted cap that squashes when you hit it
+  const CAPS = ['#e0589a', '#7a5ad8', '#3fa8e0', '#ff9b3d', '#3fc8b0'];
+  const toadCap = (i) => {
+    const P = [at(GK.blob(1.75, 0.95, 1.75, CAPS[i], { seed: 971 + i, lump: 0.1, ws: 12, hs: 7 }), 0, 1.75, 0)];
+    P.push(at(GK.blob(1.6, 0.2, 1.6, U.shade(CAPS[i], -0.25), { seed: 975 + i, lump: 0.05, ws: 12, hs: 4 }), 0, 1.35, 0));
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * TAU + i, e = 0.3 + 0.5 * U.hash2(k, i, 9);
+      P.push(at(GK.blob(0.34, 0.12, 0.34, '#fff6e0', { seed: 980 + k, ws: 6, hs: 4, lump: 0 }), Math.cos(a) * 1.7 * e, 1.75 + 0.95 * (1 - e * e) * 0.93, Math.sin(a) * 1.7 * e));
+    }
+    return GK.merge(P);
+  };
+  const TOAD_CAPS = CAPS.map((_, i) => memo(() => toadCap(i)));
+  const TOAD_STEM_GEO = memo(() => GK.merge([
+    at(GK.cyl(0.62, 0.9, 1.4, '#f4ecd8', { seed: 991, segs: 10, hsegs: 2, lump: 0.06 }), 0, 0.7, 0),
+    at(GK.blob(1.25, 0.28, 1.25, '#5ea87a', { seed: 992, lump: 0.1, ws: 10, hs: 4 }), 0, 0.12, 0),
+  ]));
+  HAZARD_FX.bumper = Object.assign({}, bumperFx, {
+    build(fx, h, hm) {
+      if (h.look !== 'toadstool') return bumperFx.build(fx, h, hm);
+      hm.toad = true;
+      const body = new THREE.Group();
+      body.scale.setScalar((h.r || 1.3) / 1.3);
+      hm.squash = new THREE.Group();
+      body.add(hm.squash);
+      hm.squash.add(new THREE.Mesh(TOAD_STEM_GEO(), fx.mats.clay));
+      hm.squash.add(new THREE.Mesh(TOAD_CAPS[h.id % CAPS.length](), fx.mats.clay));
+      hm.glow = fx.glowSprite(0xffb0e8, 6);
+      hm.glow.position.y = 1.6;
+      body.add(hm.glow);
+      return body;
+    },
+    update(fx, hm, h, time) {
+      if (!hm.toad) return bumperFx.update(fx, hm, h, time);
+      const p = U.clamp(h.pulse || 0, 0, 1), wob = p * Math.cos((1 - p) * 14);
+      hm.squash.scale.set(1 + 0.32 * wob, 1 - 0.2 * wob, 1 + 0.32 * wob);
+      const g = CFG.glow !== undefined ? CFG.glow : 1;
+      hm.glow.material.opacity = g * (0.35 + 0.5 * p + Math.sin(time * 3 + h.id) * 0.07);
+      hm.glow.scale.setScalar(6 * (1 + 0.5 * p));
+    },
+  });
+})();

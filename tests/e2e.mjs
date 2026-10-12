@@ -391,7 +391,12 @@ try {
     if (done) break;
     await wait(1000); // (a frame here takes about a second)
   }
-  check('the phones kept their links while the race was driven home', await host.evaluate(() => Monitor.entries.filter((e) => e.kind === 'phone-relink').length === 1));
+  // (only the race counts: on a slow machine the lobby can stall the big screen for ten seconds before it,
+  // and a phone that hears nothing for that long rightly rebuilds its link)
+  check('the phones kept their links while the race was driven home', await host.evaluate(() => {
+    const kinds = Monitor.entries.map((e) => e.kind);
+    return Monitor.entries.slice(kinds.lastIndexOf('race-start') + 1).filter((e) => e.kind === 'phone-relink').length === 1;
+  }));
   await host.waitForFunction(() => App.screen === 'results', null, { timeout: 40000 });
   const res = await host.evaluate(() => ({ rows: App.lastResults.length, races: Save.data.races, paid: App.lastResults.filter((r) => r.slot >= 0).map((r) => [r.slot, r.earned, Save.wallet(Party.players[r.slot]).coins]) }));
   check('results with every racer', res.rows === 8, JSON.stringify(res));
