@@ -328,15 +328,20 @@ npm run test:sim     # headless races on every course (Node only)
 npm run test:e2e     # big screen + two phones in Chromium (needs Playwright)
 ```
 
-- `tests/sim.js` (about 20 s) loads the real track, kart, item, bot and race code in Node and
+- `tests/sim.js` (about a minute) loads the real track, kart, item, bot and race code in Node and
   runs full eight-bot races on every course: everyone must finish, nobody may get stuck or keep
   falling off, bots must drift and use items, a key must open each hidden route (and no
   keyless kart may pass a locked gate), and each ramp must clear its chasm. On the
   point-to-point run the sections must come in order, every bot must glide both chasms and
   fly through the rings, and some must take each side of the fork. Mechanics checks cover the
   glider, boost rings, anti-gravity spin boosts, currents, banking, the road-end barriers,
-  moguls, rescue spots, the cargo-plane intro, the staff ghost and every hazard kind, and the
-  haptics: brake judder, quiet tarmac and ice against off-road, kerbs and planks, moguls, wall
+  moguls, rescue spots, the cargo-plane intro, the staff ghost and every hazard kind. Fable Fair
+  gets its own: the coaster's crests must throw a kart up briefly and the Flying Dutchman's
+  plunge must end in one big splash (at 100, 150 and 200cc, with nobody falling off), thorn
+  hedges and acorn spots must leave room to drive through, the Rabbit Hole must meet the road
+  level, bots must steer round hedges and on past the tunnel's mouth, no bot may be held up for
+  long on any course, and every song must be well-formed (Desert Mirage must play the Puffball
+  Circuit tune). Then the haptics: brake judder, quiet tarmac and ice against off-road, kerbs and planks, moguls, wall
   hits by impact, bumps on both phones, the revving engine, nearby stompers, and a vibration
   pattern on the phone for every jolt the big screen can send. And every race ends: the finish
   window after the first human is home, the time cap with nobody home, and the rescue cloud
@@ -348,7 +353,8 @@ npm run test:e2e     # big screen + two phones in Chromium (needs Playwright)
   steers with phone input, checks split screen, finishes the race and checks the results, the
   coin bank, the garage and the Edit Panel. Then it picks Mount Wobble from the leader's phone
   (all five courses listed, laps disabled), starts the run and checks the phone's HUD counts
-  the sections and the music follows them. On the phone it also checks the Y button throws the
+  the sections and the music follows them. It does the same on Fable Fair, where the sections
+  are laps: each has its own song and title card, and the last says FINAL LAP. On the phone it also checks the Y button throws the
   item backwards, key presses click, a wall hit jolts and braking judders the vibration motor,
   and Haptics Off keeps it still. For when things go wrong it pauses from a phone that isn't
   the leader (every phone shows the pause menu, only the leader's has Restart and Quit) and
