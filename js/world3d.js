@@ -1919,8 +1919,16 @@ class World3D {
   // Ramps (blue and white), glider ramps (with a glowing lip) and snowy moguls, banking-aware.
   rampGeo(p, z) {
     const kind = z.kind;
+    if (kind === 'hump' && this.multi) return this.humpStrips(p, z);
     const rise = kind === 'hump' ? (u) => z.h * Math.sin(Math.PI * u) : (u) => z.h * u;
-    const cols = kind === 'glide' ? ['#3fd0ff', '#ffffff'] : kind === 'hump' ? [this.theme.shoulder, U.shade(this.theme.shoulder, -0.06)] : ['#58b4ff', '#fff6ea'];
+    // a mogul wears the colour of the shoulder around it (on a course whose laps differ: that lap's, and the road style's)
+    let humpCol = this.theme.shoulder;
+    if (this.multi) {
+      const i = p.indexAt((z.s0 + z.s1) / 2), rth = this.themes[this.themeIdx[p.index][i]] || this.theme;
+      humpCol = SHOULDER_COL[p.style[i]] || rth.shoulder;
+      if (humpCol === 'dirt') humpCol = rth.dirt;
+    }
+    const cols = kind === 'glide' ? ['#3fd0ff', '#ffffff'] : kind === 'hump' ? [humpCol, U.shade(humpCol, -0.06)] : ['#58b4ff', '#fff6ea'];
     const cA = new THREE.Color(cols[0]), cB = new THREE.Color(cols[1]);
     const verts = [], cl = [], idx = [];
     const rows = Math.max(2, Math.ceil((z.s1 - z.s0) / 0.5));
@@ -1962,6 +1970,21 @@ class World3D {
         this.glow(g.x, g.y + z.h + 0.6, g.z, 2.6, '#6ff2ff', 1);
       }
     }
+  }
+
+  // A mogul on a course whose laps differ: the road itself swells, in its own surface (the coaster's
+  // sleepers and rails ride up and over it) with the shoulders lifted beside it.
+  humpStrips(p, z) {
+    const i = p.indexAt((z.s0 + z.s1) / 2), style = p.style[i], rth = this.themes[this.themeIdx[p.index][i]] || this.theme;
+    let shCol = SHOULDER_COL[style] || rth.shoulder;
+    if (shCol === 'dirt') shCol = rth.dirt;
+    const rise = (u) => z.h * Math.sin(Math.PI * u);
+    const a = (pt) => Math.max(z.d0, -pt.hw - pt.sh), b = (pt) => Math.min(z.d1, pt.hw + pt.sh);
+    const o = { across: 4, rise, step: 0.5 };
+    this.put(this.strip(p, z.s0, z.s1, (pt) => Math.min(Math.max(a(pt), -pt.hw), pt.hw), (pt) => Math.max(Math.min(b(pt), pt.hw), -pt.hw), 0.1, o), this.roadMat(style), { cast: false, far: true, name: 'ramps' });
+    const so = { across: 2, rise, step: 0.5, color: shCol, vScale: 8 };
+    this.put(this.strip(p, z.s0, z.s1, (pt) => a(pt), (pt) => Math.max(a(pt), Math.min(-pt.hw, b(pt))), 0.08, so), this.stillMat, { cast: false, far: true, name: 'ramps' });
+    this.put(this.strip(p, z.s0, z.s1, (pt) => Math.min(b(pt), Math.max(pt.hw, a(pt))), (pt) => b(pt), 0.08, so), this.stillMat, { cast: false, far: true, name: 'ramps' });
   }
 
   chevronTexture(candy) {
@@ -2149,8 +2172,9 @@ class World3D {
     this.arch(p, s, { cols: ['#2b1838', '#fff6ea'], tex, pillar: 6 });
   }
   checkpointArch(p, s, n, name) {
-    const palette = [['#58b4ff', '#ffffff'], ['#ffb347', '#ffffff'], ['#7ddc6f', '#ffffff'], ['#c77dff', '#ffffff']][(n - 2) % 4];
     const lap = this.def.lapMode;
+    // laps with looks of their own are gated in their own colours
+    const palette = lap && this.multi && this.themes[n - 1] ? this.themes[n - 1].curb : [['#58b4ff', '#ffffff'], ['#ffb347', '#ffffff'], ['#7ddc6f', '#ffffff'], ['#c77dff', '#ffffff']][(n - 2) % 4];
     const tex = this.signTexture((lap ? 'lap' : 'section') + n, 512, 128, palette[0], '#ffffff', [[(lap ? 'LAP ' : 'SECTION ') + n, 46], [String(name || '').toUpperCase(), 34]]);
     this.arch(p, s, { cols: palette, tex, pillar: 5, glow: palette[0] });
   }
@@ -3562,7 +3586,7 @@ const LANDMARKS = {
     this.scene.add(fall);
     this.keep(sheet);
     // the cliff behind and rocks around
-    const rock = this.def.theme === 'lava' ? '#5b4a6e' : '#8c8296', cap = this.def.theme === 'meadow' ? '#62b956' : '#ffffff';
+    const rock = lm.rock || (this.def.theme === 'lava' ? '#5b4a6e' : '#8c8296'), cap = lm.cap || (this.def.theme === 'meadow' ? '#62b956' : '#ffffff');
     const P = [];
     const rows = Math.max(2, Math.round(h / 7));
     for (let r = 0; r < rows; r++) {

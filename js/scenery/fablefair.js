@@ -16,6 +16,27 @@ const FableKit = {
     const road = at.path.point(at.s, 0);
     return Math.atan2(road.z - z, road.x - x);
   },
+  // chunky clay beads along a curve, a lumpy arch (pts: [[lateral, up], ...] in the local frame)
+  beads(P, pts, r, col, seed, x = 0) {
+    pts.forEach(([z, y], k) => P.push(GK.at(GK.blob(r, r, r, typeof col === 'function' ? col(k) : col, { seed: seed + k, ws: 7, hs: 5, lump: r * 0.25 }), x, y, z)));
+  },
+  // the points of a pointed (ogee-ish) arch of half-width e and rise H
+  archPoints(e, H, n) {
+    const pts = [];
+    for (let k = 0; k <= n; k++) {
+      const u = k / n; // 0 = right foot, 1 = left foot
+      const z = e * Math.cos(u * Math.PI);
+      const w = Math.abs(z) / e;
+      pts.push([z, H * Math.pow(Math.max(0, 1 - Math.pow(w, 1.9)), 0.62)]);
+    }
+    return pts;
+  },
+  // an onion dome: a squashed bulb on a short neck with a finial
+  onion(P, x, y, z, r, col, seed, gold = '#ffd166') {
+    P.push(GK.at(GK.blob(r, r * 1.25, r, col, { seed, ws: 10, hs: 7, lump: r * 0.05 }), x, y + r * 1.0, z));
+    P.push(GK.at(GK.cone(r * 0.42, r * 1.3, col, { segs: 8, hsegs: 2, seed: seed + 1, lump: 0 }), x, y + r * 2.5, z));
+    P.push(GK.at(GK.blob(r * 0.22, r * 0.22, r * 0.22, gold, { seed: seed + 2, ws: 6, hs: 4, lump: 0 }), x, y + r * 3.25, z));
+  },
   // Puffs of smoke that rise, swell and fade in a loop above (x, y, z).
   smoke(world, x, y, z, size = 1, col = '#eeeef6') {
     // soft unlit puffs (a lit clay puff turns dirty grey at dusk), each fading as it rises
@@ -418,6 +439,41 @@ const FableKit = {
         P.push(at(GK.cone(0.5 + rnd() * 0.3, h, cols[k % cols.length], { segs: 5, seed: seed + k, lump: 0.04 }), Math.cos(a) * d, h / 2, Math.sin(a) * d, (rnd() - 0.5) * 0.3, 0, (rnd() - 0.5) * 0.3));
       }
       return GK.merge(P);
+    },
+  });
+
+  Object.assign(LANDMARKS, {
+    // {seg, t, text, sub, look: 'bazaar' | 'canyon' | 'coaster' | 'ship' | 'dream'}: a ride gate over the road:
+    // two pillars with domes and a pointed arch of clay beads, the name of the ride on a sign.
+    ridegate(lm, x, y, z, head, parts) {
+      const w = this.track.where(lm), p = w.path;
+      const q = p.point(w.s, 0);
+      const e = q.hw + q.sh + 1.3, H = 8.5;
+      const m = this.frame(p, w.s);
+      const look = lm.look || 'bazaar';
+      const L = {
+        bazaar: { post: '#ecd29c', arch: '#2fb0b8', dome: '#2fb0b8', bg: '#2a7c8c', fg: '#fff3d0' },
+        canyon: { post: '#cf9560', arch: '#d8a46a', dome: '#4aa8e8', bg: '#2f7fb8', fg: '#ffffff' },
+        coaster: { post: '#c4443c', arch: '#fff0d6', dome: '#ffd166', bg: '#c4443c', fg: '#fff6e0' },
+        ship: { post: '#4b3f58', arch: '#6a5a78', dome: '#5ed8a0', bg: '#2b2540', fg: '#9bffcb' },
+        dream: { post: '#e6e0ff', arch: '#ffe08a', dome: '#b8a8ff', bg: '#3a2f7a', fg: '#ffe9a8' },
+      }[look];
+      const P = [];
+      FableKit.beads(P, FableKit.archPoints(e, H, 26), 0.95, (k) => (k % 3 ? L.arch : L.post), 10);
+      for (const zz of [-e, e]) {
+        P.push(at(GK.cyl(1.5, 1.9, H - 1, L.post, { seed: zz > 0 ? 40 : 41, segs: 10, lump: 0.1 }), 0, (H - 1) / 2, zz));
+        P.push(at(GK.torus(1.55, 0.3, '#c99a3c', { seed: 42, ts: 12, rs: 4, lump: 0 }), 0, H * 0.55, zz, Math.PI / 2, 0, 0));
+        FableKit.onion(P, 0, H - 1.2, zz, 1.7, L.dome, zz > 0 ? 50 : 60);
+      }
+      // a crown on the arch's point
+      P.push(at(GK.cone(0.7, 2.4, '#ffd166', { segs: 6, hsegs: 2, seed: 70, lump: 0 }), 0, H + 1.1, 0));
+      this.putAt(GK.merge(P), m, this.clayMat, { name: 'ridegate' });
+      const tex = this.signTexture('fable:gate:' + look + (lm.text || ''), 512, 160, L.bg, L.fg, [[lm.text || 'FABLE FAIR', lm.text && lm.text.length > 12 ? 52 : 64], ...(lm.sub ? [[lm.sub, 28]] : [])]);
+      const sign = this.signGeo(Math.min(2 * e - 4, 16), 4);
+      sign.translate(0, H * 0.62, 0);
+      this.putAt(sign, m, this.signMat(tex), { cast: false });
+      const v = new THREE.Vector3();
+      for (const zz of [-e, e]) this.glow(...v.set(0.8, H * 0.55, zz).applyMatrix4(m).toArray(), 3.2, '#ffd98a', 0);
     },
   });
 })();

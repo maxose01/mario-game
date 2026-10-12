@@ -509,6 +509,39 @@ try {
   await host.click('#pauseQuit');
   await host.waitForFunction(() => App.screen === 'lobby', null, { timeout: 10000 });
 
+  // ---- Fable Fair: one road in three laps, each with its own song and title card ----
+  await ana.click('#tracks button:has-text("Fable Fair")');
+  await host.waitForFunction(() => Party.settings.track === 'fablefair', null, { timeout: 5000 });
+  check('laps are fixed for Fable Fair too (three laps along one road)', (await ana.evaluate(lapsOff, '#sLaps button')) && (await host.evaluate(lapsOff, '#optLaps button')));
+  await ana.click('#leadStart');
+  await host.waitForFunction(() => App.screen === 'race' && App.race && App.race.track.id === 'fablefair', null, { timeout: 30000 });
+  await host.evaluate(() => {
+    const r = App.race;
+    while (r.state !== 'race') {
+      Party.readControls();
+      App.applyControls();
+      r.update(1 / 60);
+    }
+  });
+  await ana.waitForFunction(() => document.getElementById('hLap').textContent === 'Lap 1/3', null, { timeout: 30000 }).catch(() => {});
+  check('Fable Fair: the phone counts laps, lap 1 plays the music box', (await ana.textContent('#hLap')) === 'Lap 1/3' && (await host.evaluate(() => App.music === 'fable1')), await ana.textContent('#hLap'));
+  await host.evaluate(() => EditPanel.skip());
+  await ana.waitForFunction(() => document.getElementById('hLap').textContent === 'Lap 2/3', null, { timeout: 30000 }).catch(() => {});
+  await wait(400);
+  const lap2 = await host.evaluate(() => ({ music: App.music, cards: [...App.view.banners.values()].map((b) => `${b.text}/${b.sub}`) }));
+  check('Fable Fair: lap 2 has its own song and a title card with the lap name', (await ana.textContent('#hLap')) === 'Lap 2/3' && lap2.music === 'fable2' && lap2.cards.includes('LAP 2/DESERT MIRAGE'), JSON.stringify(lap2));
+  await shot(host, 'fablefair-lap2');
+  await host.evaluate(() => EditPanel.skip());
+  await ana.waitForFunction(() => document.getElementById('hLap').textContent === 'Lap 3/3', null, { timeout: 30000 }).catch(() => {});
+  await wait(400);
+  const lap3 = await host.evaluate(() => ({ music: App.music, cards: [...App.view.banners.values()].map((b) => `${b.text}/${b.sub}`) }));
+  check('Fable Fair: the last lap has its own song and a FINAL LAP card', (await ana.textContent('#hLap')) === 'Lap 3/3' && lap3.music === 'fable3' && lap3.cards.includes('FINAL LAP!/DREAM SKYWAY'), JSON.stringify(lap3));
+  await shot(host, 'fablefair-lap3');
+  await host.keyboard.press('Escape');
+  await host.waitForSelector('#scr-pause:not([hidden])', { timeout: 10000 });
+  await host.click('#pauseQuit');
+  await host.waitForFunction(() => App.screen === 'lobby', null, { timeout: 10000 });
+
   // ---- a solo garage purchase on the big screen ----
   const boCoins = await host.evaluate(() => Save.wallet(Party.players[1]).coins);
   await host.evaluate(() => {

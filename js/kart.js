@@ -150,6 +150,13 @@ class Kart {
     if (surf === 'offroad' && !shielded) max *= Math.min(1, CFG.offroadSpeed + this.tune.offroad);
     if (surf === 'mud' && !shielded) max *= 0.42;
     if (surf === 'shallow' && !shielded) max *= 0.82;
+    // wading into a splash pool (a shallow zone with look 'splash') at speed: one big splash per entry
+    const inPool = surf === 'shallow' && this.onGround;
+    if (inPool && !this.inPool && Math.abs(this.vf) > 8) {
+      const pool = this.track.zoneAt(loc, 'shallow');
+      if (pool && pool.look === 'splash') this.race.emit('bigsplash', this, Math.abs(this.vf));
+    }
+    this.inPool = inPool;
     if (this.boostT > 0) max = base * CFG.boostSpeed;
     if (this.starT > 0) max = Math.max(max, base * CFG.starSpeed);
     this.maxNow = max;

@@ -58,7 +58,11 @@
 //                glide (a ramp that opens the glider), hump (a mogul of height h),
 //                gap (no ground: a chasm), current (water stream: flow = units/s along the road,
 //                negative = against you), antigrav (same as the segment flag)
-//              boost pads may carry look: 'candy' (peppermint swirls instead of chevrons)
+//              boost pads may carry look: 'candy' (peppermint swirls instead of chevrons) and
+//              power (the share of a full pad's boost they give, e.g. 0.5); shallow zones may
+//              carry look: 'splash' (a kart wading in at speed throws a big splash: the pool
+//              at the foot of a water chute); on a course whose laps differ a hump is drawn
+//              as a swell of the road's own surface
 //   boxes      [{seg, t, d: [offsets]}] item box rows
 //   coins      [{seg, t, d, n, gap, dd, h}] coin lines
 //   keys       [{seg, t, d, h}] the floating key for the course's locked gate
@@ -114,6 +118,7 @@ const THEMES = {
   // the floating land reaches beyond the road's edge, default 30).
   // Lap 1: a dusk-lit enchanted forest, emerald moss under violet haze and warm lantern light.
   fairy: {
+    accent: '#ffd98a', // the colour of the lap's title card
     sky: ['#2b2a63', '#7b5aa0', '#f4a79c'], fog: '#5d4c80', fogNear: 30, fogFar: 300, sun: '#ffe7b0',
     hemiSky: '#c3b0f0', hemiGround: '#2c5a44', sunLight: '#ffd7a0',
     road: '#8d7a68', roadLine: '#ffe9b8', curb: ['#e8a93f', '#fff0c4'], shoulder: '#3b8a55',
@@ -123,6 +128,7 @@ const THEMES = {
   },
   // Lap 2: a bright desert under a hot blue sky: golden sand, sandstone, turquoise tiles.
   mirage: {
+    accent: '#ffb35c',
     sky: ['#2c7fd6', '#8cc6f0', '#ffe2ae'], fog: '#f6dcae', fogNear: 120, fogFar: 640, sun: '#fff6d0',
     hemiSky: '#fff0d2', hemiGround: '#b7814e', sunLight: '#fff1d0',
     road: '#e2c392', roadLine: '#fff6e2', curb: ['#2d9cb8', '#fff3d6'], shoulder: '#e8c984',
@@ -132,6 +138,7 @@ const THEMES = {
   },
   // Lap 3: a night sky of lavender clouds, moonlight and stars.
   dream: {
+    accent: '#cdb8ff',
     sky: ['#0d0f3b', '#2f2c80', '#7a55b0'], fog: '#3a3790', fogNear: 60, fogFar: 460, sun: '#fff6d8',
     hemiSky: '#8f93ff', hemiGround: '#2a1d5e', sunLight: '#bcc8ff',
     road: '#bdb4f2', roadLine: '#ffffff', curb: ['#ffd166', '#ffffff'], shoulder: '#9488e0',

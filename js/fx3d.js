@@ -872,6 +872,16 @@ class RaceFX {
         if (k.loc && k.loc.path && k.loc.path.style && k.loc.path.style[k.loc.i] === 'water') this.burst(this.glow, k.x, k.y + 0.2, k.z, 18, ['#e4f7ff', '#9fdcff', '#ffffff'], 6, 0.14, 0.7, 14);
         else this.burst(this.clay, k.x, k.y + 0.2, k.z, 10, [this.kartTheme(k).shoulder, '#e8dde8'], 4, 0.4, 0.6, 4);
         break;
+      case 'bigsplash': {
+        // a wall of spray: a fountain of droplets, foam and a second, slower swell
+        if (!k) break;
+        const wet = ['#e4f7ff', '#9fdcff', '#ffffff', '#c4ecff'];
+        this.burst(this.glow, k.x, k.y + 0.4, k.z, 110, wet, 13, 0.18, 1.1, 15);
+        this.burst(this.glow, k.x, k.y + 0.6, k.z, 50, wet, 7, 0.3, 1.4, 8);
+        // foam: big soft white puffs that bloom and fall back
+        this.burst(this.glow, k.x, k.y + 0.8, k.z, 22, ['#ffffff', '#eaf8ff'], 5, 0.6, 1.2, 3);
+        break;
+      }
       case 'launch':
         // a puff of snow off a mogul's crest (or a ramp's lip)
         if (k && this.world.theme.ambient === 'snow') this.burst(this.clay, k.x, k.y + 0.2, k.z, 6, ['#ffffff', '#e3edf9'], 3, 0.3, 0.5, 4);
@@ -1040,11 +1050,13 @@ const HAZARD_FX = {
     build(fx, h, hm) {
       const r = h.r || 2.2;
       const th = fx.world.theme;
-      hm.snow = (h.look || (th.ambient === 'snow' ? 'snowball' : 'boulder')) === 'snowball';
-      const lava = !hm.snow && fx.race.track.def.theme === 'lava';
+      const look = h.look || (th.ambient === 'snow' ? 'snowball' : 'boulder');
+      hm.snow = look === 'snowball';
+      hm.moon = look === 'moon'; // Fable Fair's Dream Skyway: a little moon
+      const lava = !hm.snow && !hm.moon && fx.race.track.def.theme === 'lava';
       const body = new THREE.Group(); // at the ball's centre
       body.position.y = r;
-      const ball = new THREE.Mesh(hm.snow ? SNOWBALL_GEO() : lava ? MAGMA_ROCK_GEO() : BOULDER_GEO(), fx.mats.clay);
+      const ball = new THREE.Mesh(hm.moon ? MOON_GEO() : hm.snow ? SNOWBALL_GEO() : lava ? MAGMA_ROCK_GEO() : BOULDER_GEO(), fx.mats.clay);
       ball.scale.setScalar(r);
       if (lava) ball.add(new THREE.Mesh(MAGMA_GLOW_GEO(), fx.mats.fire));
       body.add(ball);
@@ -1061,12 +1073,12 @@ const HAZARD_FX = {
       // snow (or grit) thrown up behind it
       if (hm.near && sp > 2.5 && Math.random() < Math.min(1, sp / 10) * 0.8 * CFG.particles) {
         const dx = h.dirX !== undefined ? h.dirX : 0, dz = h.dirZ !== undefined ? h.dirZ : 0;
-        const cols = hm.snow ? ['#ffffff', '#e8f0fb'] : hm.lava ? ['#5a4466', '#ff8a3d'] : ['#b8a99a', '#8c7f8e'];
+        const cols = hm.moon ? ['#fff3b0', '#ffe08a'] : hm.snow ? ['#ffffff', '#e8f0fb'] : hm.lava ? ['#5a4466', '#ff8a3d'] : ['#b8a99a', '#8c7f8e'];
         const x = h.x - dx * r * 0.7 + (Math.random() - 0.5) * r, z = h.z - dz * r * 0.7 + (Math.random() - 0.5) * r;
         fx.clay.spawn(x, h.y + 0.3, z, -dx * 2.5 + (Math.random() - 0.5) * 2, 2 + Math.random() * 2.5, -dz * 2.5 + (Math.random() - 0.5) * 2, 0.3 + Math.random() * 0.35, cols[Math.random() < 0.7 ? 0 : 1], 0.8, 7, 1.8, 1.4);
       }
     },
-    bits: (h) => (h.look === 'boulder' ? ['#9a8f9e', '#7c7a8e', '#c9c3d6'] : ['#ffffff', '#e3edf9', '#cfe0f5']),
+    bits: (h) => (h.look === 'boulder' ? ['#9a8f9e', '#7c7a8e', '#c9c3d6'] : h.look === 'moon' ? ['#fff3b0', '#e4c887', '#ffffff'] : ['#ffffff', '#e3edf9', '#cfe0f5']),
   },
 
   // ---- a penguin: waddles up the road, then belly-slides back down it ----
@@ -1737,6 +1749,12 @@ const BOULDER_GEO = memo(() => {
     if (i % 3 === 0 && d.y > -0.2) P.push(fxStick(GK.blob(0.34, 0.08, 0.28, '#7fb069', { seed: 440 + i }), d, 0.96));
     else if (i % 2) P.push(fxStick(GK.blob(0.36, 0.1, 0.3, '#b3a9b6', { seed: 450 + i }), d, 0.92));
   });
+  return GK.merge(P);
+});
+const MOON_GEO = memo(() => {
+  const P = [GK.blob(1, 1, 1, '#fff1c0', { seed: 481, lump: 0.05, freq: 2.0, ws: 20, hs: 15, vary: 0.03 })];
+  // craters: pale pocks pressed into the surface
+  fxSphereDirs(14).forEach((d, i) => P.push(fxStick(GK.blob(0.26 + (i % 3) * 0.05, 0.07, 0.24, i % 2 ? '#e4c887' : '#efd699', { seed: 490 + i }), d, 0.96)));
   return GK.merge(P);
 });
 const MAGMA_ROCK_GEO = memo(() => GK.blob(1, 0.95, 1, '#4a3a52', { seed: 461, lump: 0.24, freq: 1.4, ws: 16, hs: 12, vary: 0.08 }));

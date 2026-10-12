@@ -2,8 +2,9 @@
 
 A Mario Kart-style racer in the claymation look of *Super Clay Isles*. Up to four people race
 on one big screen (a smart TV, desktop or tablet) and steer with their phones, or you race
-seven clay bots on your own. Four courses run from a gentle meadow circuit to a run down a
-whole mountain, with gliders, anti-gravity, boost rings and a staff ghost to chase. Every kart,
+seven clay bots on your own. Five courses run from a gentle meadow circuit to a run down a
+whole mountain and a fairy-tale fair in the clouds, with gliders, anti-gravity, boost rings and a
+staff ghost to chase. Every kart,
 racer, tree and cloud is sculpted in code from lumpy clay primitives that "boil" twelve times a
 second like stop-motion. There are no model, texture or audio files: everything is generated,
 and the music and sound are synthesized.
@@ -128,7 +129,8 @@ it, but no rumble.
 
 ## What's in it
 
-**Four courses**, from easiest to hardest, each with a key-locked hidden route. The lobby cards
+**Five courses**, each with a key-locked hidden route (the first four run from easiest to hardest;
+Fable Fair, the newest, is appended and is rated 3 of 4). The lobby cards
 show each course's difficulty (one to four pips), laps or sections, whether you've found its
 secret route, and its staff time once the course has one.
 
@@ -138,12 +140,20 @@ secret route, and its staff time once the course has one.
 | Sherbet Slopes | laps · medium (997 per lap) | A pastel sherbet-ice mountain: a banked switchback climb past giant ice-cream scoops, the summit by the ice castle, the first glider leap over a crevasse, a ski jump, a frozen lake full of sliding penguins and a rink with skaters | **Crystal Cave**, an icy tunnel with falling icicles |
 | Magma Keep | laps · hard (1167 per lap) | King Mudlet's castle over a lava sea: the stomper hall inside the keep, boulders rolling across the rampart, fireballs leaping over a narrow lava bridge past a lava fall, fire bars, the **Tower Twist** (an anti-gravity hairpin around the great spire), lava geysers before the lava-pit jump and a fire-breathing King Mudlet statue | **Rainbow Bridge** arching over the lava lake |
 | Mount Wobble | point-to-point, 3 sections · hardest (a 4.1 km run) | One run from the summit to the valley. **Summit Drop**: jump out of a cargo plane onto the ice shelf, sweepers, a snowball gully, a cliff ledge, an anti-gravity spiral with bumpers and falling icicles in the ice cave, then a glider leap over the crevasse. **Wobble Dam**: across the top of the dam, then an anti-gravity water chute that doubles back down the canyon at its foot past the spillway waterfalls, a fork through the pine woods (the Woodcutter Trail has moles and boost pads) and a log bridge. **Ski Run**: slalom gates, skiers and a moving ski lift, then the bobsleigh run (a narrow ice channel of steeply banked curves, from the wooden start house past cheering grandstands to the finish arch), moguls and a giant anti-gravity ski jump that launches the gliders through boost rings to the log-cabin finish | **Frozen Falls** beside the reservoir |
+| Fable Fair | 3 different laps along one road · hard (a 2.7 km run) | A fairy-tale theme park in the clouds (original art and music, inspired by the fairy-tale forests and rides of Dutch parks), raced as one run in three laps that each have their own world, song and title card. **Lap 1, the Fairy-Tale Forest**: a dusk-lit enchanted wood of mossy trees, glowing toadstools and lantern posts; a gingerbread cottage beside a slalom of **candy pads** (a small boost each), a **talking tree** that chatters before it drops acorns on marked spots by the key, a **giant clog** the road runs through, the **sleeping castle** on its hill in the middle of the hairpin, and briar hedges across the chicanes that block half the road at a time. **Lap 2, the Desert Mirage**: a bazaar of striped stalls under a palace and a domed temple, then three rides: **Splash Canyon** (a river between sandstone cliffs, with water jets on the walls that gurgle for a second and then shove you sideways, all on one steady beat), the **Dune Dasher** rollercoaster (a wooden track on trestles whose hills and dips throw a fast kart into the air) and the **Flying Dutchman** (up the gangway and along a ghost ship's deck, off the bow and down a water chute into a pool with a huge splash). **Lap 3, the Dream Skyway**: a night-sky road along lavender clouds, an anti-gravity spiral winding round the sleeping Moon (in its nightcap) past star bumpers, a glider leap over the Milky Way through boost rings, and little moons rolling across the home straight | **Rabbit Hole**, an earthen tunnel under the castle's hill (the key hangs by the talking tree) |
 
 **Point-to-point runs.** Mount Wobble is raced once, top to bottom, through checkpoint arches
 that split it into sections. The HUD and the phones count sections instead of laps, and every
 section has its own song: when the human racer furthest down the mountain passes an arch, the
 music changes on the next beat (no final-lap speed-up here). The race starts with the whole
 field dropping out of a cargo plane on gliders.
+
+**Courses whose laps differ.** Fable Fair is one continuous road split into three laps
+(`lapMode`: the HUD, the phones and the results say Lap 1/3, 2/3 and 3/3, and the results list
+each lap's time). Every lap is its own world: the land, scenery, road surface, walls, lamps, sky,
+fog, light and falling motes change at the lap line (each camera blends over a second, so a
+split screen can show two laps at once), each lap has its own song, and a title card with the
+lap's name comes up as you cross the line.
 
 **Course features.** Glide ramps unfold a glider that flies the same arc at any speed, so the
 jump suits every engine class; steer it gently through the air. On glowing blue anti-gravity
@@ -152,11 +162,13 @@ road the wheels fold flat and bumping another kart (or a bumper) sends both of y
 like a conveyor, shallows slow you down, moguls throw fast karts into the air, corners are
 banked, and some roads fork into two routes of similar length.
 
-**Moving hazards**: wandering Mudlets, stompers, fire bars and snowmen, plus rolling snowballs
-and boulders, sliding penguins, skiing critters, cows, moles that pop out of the ground, water
-and lava geysers, leaping fireballs, anti-gravity bumpers, falling icicles and slalom poles.
-The sneaky ones give themselves away first (a shaking mound, a bubbling geyser, a trembling
-icicle), and star power bowls the critters and snowballs over.
+**Moving hazards**: wandering Mudlets, stompers, fire bars and snowmen, plus rolling snowballs,
+boulders and little moons, sliding penguins, skiing critters, cows, moles that pop out of the
+ground, water and lava geysers, leaping fireballs, anti-gravity bumpers, falling icicles, slalom
+poles, and Fable Fair's thorn hedges, water jets and talking tree. The sneaky ones give
+themselves away first (a shaking mound, a bubbling geyser, a trembling icicle, a jet that gurgles
+for a second, a tree that talks and marks where its acorns will land), and star power bowls the
+critters and snowballs over.
 
 **Staff ghost.** Race alone with bots off and a translucent Staff Ghost drives the course at
 full pace (it touches nothing and takes no place). Courses can set a staff time per engine
@@ -261,7 +273,8 @@ js/config.js        every tweakable parameter (drives the Edit Panel), presets, 
 js/parts.js         racers, karts, wheels, paints, stats and prices
 js/tracks.js        the course format (documented), road styles and colour themes
 js/courses/*.js     one file per course, pure data (also raced by the Node tests)
-js/scenery/*.js     course-specific 3D landmark builders
+js/scenery/*.js     course-specific 3D landmark builders (Fable Fair has one per lap, plus its
+                    road, wall, lamp and decor looks and its hazard models)
 js/track.js         turtle-built roads (circuits or point-to-point runs with sections), banking,
                     anti-gravity, branches and forks, zones, rings, spatial queries (pure)
 js/kart.js          kart physics: grip, drifting, mini-turbos, air, gliders, anti-gravity,
@@ -283,8 +296,10 @@ js/net.js           local WebSocket and online WebRTC transports
 js/screens.js       menu screens
 js/icons.js         2D clay icons (items, racers, parts) for the HUD and the phone
 js/clay.js          2D claymation drawing toolkit (from Super Clay Isles)
-js/audio.js         synthesized music (a song per world, one per Mount Wobble section),
-                    sound effects, engine hum, glider wind and the cargo plane's drone
+js/audio.js         synthesized music (a song per world, one per Mount Wobble section and
+                    Fable Fair lap: waltz bars, quarter-tone notes, music-box, oud, ney and
+                    other instrument voices, darbuka drums), sound effects, engine hum, glider
+                    wind and the cargo plane's drone
 js/input.js         keyboard, gamepad and touch input, menu navigation
 js/editpanel.js     Edit Panel
 js/monitor.js       race health monitor: the input watchdog's log, stuck and bad-number checks,
@@ -332,7 +347,7 @@ npm run test:e2e     # big screen + two phones in Chromium (needs Playwright)
   leader's phone,
   steers with phone input, checks split screen, finishes the race and checks the results, the
   coin bank, the garage and the Edit Panel. Then it picks Mount Wobble from the leader's phone
-  (all four courses listed, laps disabled), starts the run and checks the phone's HUD counts
+  (all five courses listed, laps disabled), starts the run and checks the phone's HUD counts
   the sections and the music follows them. On the phone it also checks the Y button throws the
   item backwards, key presses click, a wall hit jolts and braking judders the vibration motor,
   and Haptics Off keeps it still. For when things go wrong it pauses from a phone that isn't

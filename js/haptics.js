@@ -129,6 +129,8 @@ class HapticTracker {
         return this.shot('bumper', 0.9);
       case 'jetpush':
         return this.shot('bump', 0.45); // the shove of a water jet
+      case 'bigsplash':
+        return this.shot('land', U.clamp((e.a - 8) / 20 + 0.45, 0.45, 1)); // into the pool at the foot of a plunge
       case 'squash':
         return this.shot('squash', 0.6);
       case 'finish':

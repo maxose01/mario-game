@@ -133,7 +133,7 @@ class RaceView {
     if (race.p2p && secs && secs.length && !this.sectionIntro && race.state === 'race' && race.raceTime > 1.3) {
       this.sectionIntro = true;
       const unit = race.track.def.lapMode ? 'LAP' : 'SECTION';
-      this.views.forEach((v, vi) => this.banner(vi, unit + ' 1', '#fff3c4', 2.2, 54, secs[0].name.toUpperCase()));
+      this.views.forEach((v, vi) => this.banner(vi, unit + ' 1', this.lapAccent(0, '#fff3c4'), 2.2, 54, secs[0].name.toUpperCase()));
     }
   }
 
@@ -176,6 +176,7 @@ class RaceView {
     v.look.set(k.x + fx * ahead, k.y + 1.1 - gl * 1.6 + slope, k.z + fz * ahead);
     v.kick = Math.max(0, v.kick - dt * 2.4);
     v.flash = Math.max(0, v.flash - dt * 2.5);
+    if (v.wet) v.wet = Math.max(0, v.wet - dt * 0.55);
     const fovT = CFG.camFov + (boosting ? CFG.camBoostFov : 0) + Math.min(1, Math.abs(k.vf) / 30) * 4 + gl * 8 + ag * 3;
     v.fov = U.lerp(v.fov, fovT, 1 - Math.exp(-5 * dt));
     v.shake = Math.max(0, v.shake - dt * 2.2);
@@ -297,6 +298,12 @@ class RaceView {
     v.focus.copy(look);
   }
 
+  // The title-card colour of lap i of a course whose laps have themes of their own (else dflt).
+  lapAccent(i, dflt) {
+    const sec = this.race.sections && this.race.sections[i];
+    const th = sec && sec.theme && THEMES[sec.theme];
+    return (this.race.track.def.lapMode && th && th.accent) || dflt;
+  }
   banner(vi, text, color, life = 1.6, size = 52, sub) {
     if (vi >= 0) this.banners.set(vi, { text, color, t: 0, life, size, sub });
   }
@@ -316,6 +323,14 @@ class RaceView {
         break;
       case 'land':
         if (v && e.a > 10) v.shake = Math.max(v.shake, 0.35);
+        break;
+      case 'bigsplash':
+        // a heavy jolt, and water on the lens for a second or two
+        if (v) {
+          v.shake = Math.max(v.shake, 0.6);
+          v.wet = 1;
+          v.drops = Array.from({ length: 28 }, () => ({ x: Math.random(), y: Math.random() * 0.8, r: 5 + Math.random() * 13, slide: 0.03 + Math.random() * 0.08, late: Math.random() * 0.25 }));
+        }
         break;
       case 'blast':
         for (const vv of this.views) {
@@ -343,8 +358,8 @@ class RaceView {
         const sec = this.race.sections && this.race.sections[e.a - 1];
         const name = sec && sec.name ? sec.name.toUpperCase() : '';
         const lapMode = this.race.track.def.lapMode;
-        if (e.type === 'finalsection') say(lapMode ? 'FINAL LAP!' : 'FINAL SECTION!', '#ff8fb1', 2.6, 50, name);
-        else say(`${lapMode ? 'LAP' : 'SECTION'} ${e.a}`, '#fff3c4', 2.4, 54, name);
+        if (e.type === 'finalsection') say(lapMode ? 'FINAL LAP!' : 'FINAL SECTION!', this.lapAccent(e.a - 1, '#ff8fb1'), 2.6, 50, name);
+        else say(`${lapMode ? 'LAP' : 'SECTION'} ${e.a}`, this.lapAccent(e.a - 1, '#fff3c4'), 2.4, 54, name);
         if (v) v.flash = 1; // a soft white flash through the checkpoint arch
         break;
       }
@@ -464,12 +479,40 @@ class RaceView {
     if (race.state === 'countdown' || (race.state === 'race' && race.raceTime < 0.8)) this.drawCountdown(ctx);
   }
 
+  // Drops of water on the lens after a big splash: they bead up, then slowly run down and clear.
+  lensDrops(ctx, v, w, h) {
+    const age = 1 - v.wet; // 0 .. 1
+    ctx.save();
+    for (const d of v.drops) {
+      const a = U.clamp(1 - (age - d.late) * 1.15, 0, 1) * Math.min(1, age * 8);
+      if (a <= 0) continue;
+      const x = d.x * w, y = (d.y + Math.max(0, age - d.late) * d.slide * 4) * h, r = d.r * (0.8 + 0.3 * (1 - age));
+      const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.35, r * 0.1, x, y, r);
+      g.addColorStop(0, `rgba(235,248,255,${0.62 * a})`);
+      g.addColorStop(0.7, `rgba(165,215,250,${0.4 * a})`);
+      g.addColorStop(1, `rgba(120,185,235,${0.22 * a})`);
+      ctx.fillStyle = g;
+      ctx.strokeStyle = `rgba(70,120,185,${0.45 * a})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.ellipse(x, y, r, r * 1.2, 0, 0, TAU);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = `rgba(255,255,255,${0.7 * a})`;
+      ctx.beginPath();
+      ctx.arc(x - r * 0.3, y - r * 0.4, r * 0.18, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   drawViewHUD(ctx, v, i, w, h, n) {
     const race = this.race, k = this.kartOf(v);
     if (v.flash > 0) {
       ctx.fillStyle = `rgba(255,252,240,${0.35 * v.flash * v.flash})`;
       ctx.fillRect(0, 0, w, h);
     }
+    if (v.wet > 0 && v.drops) this.lensDrops(ctx, v, w, h);
     this.speedLines(ctx, v, w, h);
     // with 3-4 views the shared minimap sits in the middle of the screen, so each quadrant
     // keeps its HUD on its outer edges: right-hand views are mirrored, top views put the

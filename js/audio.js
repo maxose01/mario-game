@@ -855,6 +855,14 @@ const SFX = {
     for (let i = 0; i < 3; i++) s.tone(480 + Math.random() * 600, 0.07, { type: 'sine', slide: 1500, vol: 0.06, delay: 0.08 + i * 0.07 });
   },
   // ---- Fable Fair ----
+  // the foot of a plunge: a thud, a great crash of water, a hiss of spray and the bubbles that follow
+  bigsplash: (s) => {
+    s.tone(95, 0.45, { type: 'sine', slide: 38, vol: 0.34 });
+    s.noise(1.3, { filter: 'bandpass', freq: 1900, slide: 380, q: 0.7, vol: 0.3, attack: 0.02 });
+    s.noise(0.9, { filter: 'lowpass', freq: 520, vol: 0.28, attack: 0.01 });
+    s.noise(0.8, { filter: 'highpass', freq: 3600, vol: 0.12, attack: 0.04, delay: 0.05 });
+    for (let i = 0; i < 6; i++) s.tone(380 + Math.random() * 700, 0.09, { type: 'sine', slide: 1500, vol: 0.06, delay: 0.3 + i * 0.1 });
+  },
   // a water jet gurgling before it blasts: a handful of bubbles bloop up the scale
   jetwarn: (s) => {
     for (let i = 0; i < 5; i++) s.tone(260 + Math.random() * 200, 0.08, { type: 'sine', slide: 520 + Math.random() * 360, vol: 0.075, delay: i * 0.075 });

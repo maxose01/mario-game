@@ -656,6 +656,9 @@ const App = {
         case 'jetpush':
           if (mine) Sound.play('splash');
           break;
+        case 'bigsplash':
+          if (mine || this.near(k, 40)) Sound.play('bigsplash');
+          break;
         case 'acorn':
           if (this.near(e.a, 45)) Sound.play('acorn');
           break;

@@ -354,6 +354,7 @@ class BotBrain {
     for (const o of items.objects) if (o.kind === 'banana' || (o.kind === 'shell' && o.owner !== k)) consider(o.x, o.z, 1.2);
     const sp = Math.max(8, k.vf);
     const pose = this._pose || (this._pose = {});
+    let hedge = null, hedge2 = null; // the nearest two hedges of thorns ahead
     for (const h of items.hazards) {
       if (!h.alive) continue;
       const dd = (h.x - k.x) ** 2 + (h.z - k.z) ** 2;
@@ -408,6 +409,18 @@ class BotBrain {
           break;
         case 'jet':
           break; // a shove, not a blow: a bot just steers back to its line
+        case 'thorn': {
+          // (a row of clumps is dodged as one hedge, by the clump that speaks for it)
+          const row = h.path === path ? thornRow(items, h) : null;
+          if (!row || row.id !== h.id) break;
+          const ahead = row.s - s;
+          if (ahead < -2.5 || ahead > 44) break;
+          if (!hedge || ahead < hedge.ahead) {
+            hedge2 = hedge;
+            hedge = { row, ahead };
+          } else if (!hedge2 || ahead < hedge2.ahead) hedge2 = { row, ahead };
+          break;
+        }
         case 'acorntree':
           // the marks its acorns will land on, from when the tree starts chattering until they splat
           for (const sp of h.spots) if (sp.state === 'warn' || sp.state === 'fall' || (h.talk && sp.state === 'hang')) consider(sp.x, sp.z, 2.4);
@@ -416,8 +429,20 @@ class BotBrain {
           consider(h.x, h.z, (h.r || 1) + 0.5); // bumpers, poles
       }
     }
+    if (hedge) push += this.hedgeDodge(path, d, hedge, hedge2);
     if (Math.abs(push) > 0.05) this.dodgeSide = Math.sign(push);
     return U.clamp(push, -0.9, 0.9);
+  }
+
+  // A hedge of thorns across part of the road: make for the open stretch beside it. (Nudging away
+  // from each clump would cancel out between two of them.) When another hedge follows soon on the
+  // other side, hug this one's edge, so the S-bend through the two is a short one.
+  hedgeDodge(path, d, near, next) {
+    const a = hedgePass(path, near.row, d);
+    if (d < a.lo - 1.2 || d > a.hi + 1.2) return 0; // already clear of it
+    let goal = a.mid;
+    if (next && next.row.s - near.row.s < 70 && hedgePass(path, next.row, a.edge).side !== a.side) goal = a.edge + a.side * 0.9;
+    return (goal - d) / a.hw;
   }
 
   thinkItems(dt, path, s) {
@@ -457,6 +482,40 @@ class BotBrain {
       this.itemT = 1.5 + this.rnd() * 4;
     }
   }
+}
+
+// Thorn clumps standing side by side make one hedge across the road: {id of the clump that speaks
+// for it, s, lo, hi (the stretch of the road it covers)} for the row a clump belongs to.
+const THORN_ROWS = new WeakMap();
+function thornRow(items, h) {
+  let rows = THORN_ROWS.get(items);
+  if (!rows) {
+    rows = new Map();
+    THORN_ROWS.set(items, rows);
+    for (const a of items.hazards) {
+      if (a.kind !== 'thorn' || rows.has(a.id)) continue;
+      const row = { id: a.id, s: a.s, lo: a.d - a.r, hi: a.d + a.r };
+      for (const b of items.hazards) {
+        if (b.kind !== 'thorn' || b.path !== a.path || Math.abs(b.s - a.s) > 2.5) continue;
+        row.lo = Math.min(row.lo, b.d - b.r);
+        row.hi = Math.max(row.hi, b.d + b.r);
+        rows.set(b.id, row);
+      }
+    }
+  }
+  return rows.get(h.id);
+}
+
+// Which way past a hedge of thorns, for a kart at lateral position at? side (-1 left, 1 right: the
+// wider open stretch, or the nearer one if both are wide enough), the hedge's edge on that side with
+// room for a kart's width, and the middle of the open stretch.
+function hedgePass(path, row, at) {
+  const hw = path.hw[path.indexAt(row.s)];
+  const lo = row.lo - 1.7, hi = row.hi + 1.7;
+  const roomL = lo - (1.4 - hw), roomR = hw - 1.4 - hi;
+  let side = at < (lo + hi) / 2 ? -1 : 1;
+  if ((side < 0 ? roomL : roomR) < 3.4 && (side < 0 ? roomR > roomL : roomL > roomR)) side = -side;
+  return { hw, lo, hi, side, edge: side < 0 ? lo : hi, mid: side < 0 ? (lo + 1.4 - hw) / 2 : (hi + hw - 1.4) / 2 };
 }
 
 // Signed curvature averaged over len units ahead of s (+ = bending right).

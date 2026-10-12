@@ -937,6 +937,119 @@ function run(race, secs, fn) {
 }
 
 // ---------------------------------------------------------------------------
+// Fable Fair's rides, ridden alone by a bot with no items: the coaster throws a kart into the air
+// (briefly), the Flying Dutchman's plunge ends in the splash pool, and nobody falls off.
+{
+  const F = getTrack('fablefair');
+  const segs = F.def.segments;
+  const ids = (pred) => segs.map((sg, i) => (pred(sg) ? i : -1)).filter((i) => i >= 0);
+  const coaster = ids((sg) => sg.look === 'coaster');
+  const plunge = ids((sg) => sg.look === 'flume')[0];
+  const cS0 = F.marks[coaster[0]].s, last = coaster[coaster.length - 1], cS1 = F.marks[last].s + F.marks[last].len;
+  const ride = (cc) => {
+    const race = new Race({ track: 'fablefair', laps: 3, cc, racers: [{ name: 'Rider', bot: true, config: { character: 'pepper' } }], seed: 7, items: false });
+    race.state = 'race';
+    const k = race.karts[0];
+    const air = [];
+    let cur = null, falls = 0, splashes = 0, t = 0;
+    while (!k.finished && t < 200) {
+      race.update(1 / 60);
+      t += 1 / 60;
+      for (const e of race.drainEvents()) {
+        if (e.type === 'fall' && e.kart === k) falls++;
+        if (e.type === 'bigsplash' && e.kart === k) splashes++;
+      }
+      const s = k.loc ? k.loc.s : 0;
+      if (!k.onGround && !k.falling) {
+        if (!cur) cur = { s0: s, t0: t };
+        cur.s1 = s;
+      } else if (cur) {
+        cur.dur = t - cur.t0;
+        air.push(cur);
+        cur = null;
+      }
+    }
+    return { k, air, falls, splashes, t };
+  };
+  for (const [cc, want] of [[100, 2], [150, 3], [200, 3]]) {
+    const r = ride(cc);
+    const hops = r.air.filter((a) => a.s0 >= cS0 - 2 && a.s0 <= cS1 && a.dur >= 0.3);
+    const longest = Math.max(0, ...hops.map((a) => a.dur));
+    check(`fablefair at ${cc}cc: the coaster's crests throw a kart into the air, briefly`, hops.length >= want && longest <= 1.7, `${hops.length} flights, ${hops.map((a) => a.dur.toFixed(2)).join('/')} s`);
+    const drop = r.air.find((a) => a.s0 >= F.marks[plunge].s - 14 && a.s0 <= F.marks[plunge].s + 10);
+    check(`fablefair at ${cc}cc: the plunge is a leap off the bow and ends in one big splash, with nobody falling off`, !!drop && drop.dur >= 0.6 && r.splashes === 1 && r.falls === 0 && r.k.finished, `${drop ? drop.dur.toFixed(2) : '-'} s in the air, ${r.splashes} splash(es), ${r.falls} falls, home in ${r.t.toFixed(0)} s`);
+  }
+}
+
+// The Rabbit Hole runs level with the road it leaves: a branch is drawn at the height of the main
+// road's centre line, so on a banked turn its mouth would stand above the road's low edge, and a
+// kart driving in from there is thrown up the step (it was: 13 units into the air).
+{
+  const F = getTrack('fablefair');
+  const main = F.main, b = F.byId.burrow, tmp = {};
+  let worst = 0, where = 0, n = 0;
+  for (let i = 0; i < b.n; i++) {
+    const ms = F.mainS(b, b.s[i]);
+    const j0 = main.indexAt(Math.max(0, ms - 40)), j1 = main.indexAt(Math.min(main.length, ms + 40));
+    for (let e = -b.hw[i]; e <= b.hw[i] + 1e-9; e += 1) {
+      const x = b.x[i] + b.nx[i] * e, z = b.z[i] + b.nz[i] * e;
+      let best = -1, bd = Infinity;
+      for (let j = j0; j <= j1; j++) {
+        const dd = (x - main.x[j]) ** 2 + (z - main.z[j]) ** 2;
+        if (dd < bd) {
+          bd = dd;
+          best = j;
+        }
+      }
+      const c = F.project(main, best, x, z, tmp);
+      if (Math.abs(c.d) > c.hw + c.sh - 0.5) continue; // not on the main road any more
+      n++;
+      const dy = Math.abs(b.y[i] - e * b.bank[i] - c.y);
+      if (dy > worst) {
+        worst = dy;
+        where = b.s[i];
+      }
+    }
+  }
+  check('fablefair: the Rabbit Hole is level with the road wherever the two overlap', n > 100 && worst < 0.3, `${n} overlapping spots, worst step ${worst.toFixed(2)} at s ${where.toFixed(0)}`);
+}
+
+// Every song is well-formed: whole bars, lines of one length, drum patterns the length of the bar,
+// real note names (a "d" after a note lowers it a quarter tone).
+{
+  const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'audio.js'), 'utf8').split('const Sound = {')[0];
+  const ctx = require('vm').createContext({ U: G('U') });
+  require('vm').runInContext(src + '\nthis.SONGS = SONGS; this.noteFreq = noteFreq;', ctx);
+  const bad = [];
+  for (const [name, sg] of Object.entries(ctx.SONGS)) {
+    const bar = sg.bar || 8, L = sg.leadSteps.length;
+    if (L % bar) bad.push(`${name}: lead is ${L} steps, not whole bars of ${bar}`);
+    if (sg.bassSteps.length !== L) bad.push(`${name}: bass is ${sg.bassSteps.length} steps, lead ${L}`);
+    if (sg.arpSteps && sg.arpSteps.length !== L) bad.push(`${name}: arp is ${sg.arpSteps.length} steps, lead ${L}`);
+    if (sg.drums.length !== bar) bad.push(`${name}: drum pattern ${sg.drums.length} long, bar ${bar}`);
+    if (sg.fill && sg.fill.length !== bar) bad.push(`${name}: fill ${sg.fill.length} long`);
+    for (const tok of [].concat(sg.leadSteps, sg.bassSteps, sg.arpSteps || [])) if (tok !== '-' && tok !== '.' && !ctx.noteFreq(tok)) bad.push(`${name}: bad note ${tok}`);
+  }
+  check(`every song is well-formed (${Object.keys(ctx.SONGS).length} songs)`, bad.length === 0, bad.slice(0, 4).join('; '));
+  check('a quarter-tone flat note sits half way between two semitones', Math.abs(ctx.noteFreq('Ed5') / Math.sqrt(ctx.noteFreq('E5') * ctx.noteFreq('Eb5')) - 1) < 1e-9);
+  // Desert Mirage plays the Puffball Circuit tune: the same rhythm and contour, only the second and
+  // sixth step of the scale lowered (maqam hijaz), at the same tempo
+  {
+    const a = ctx.SONGS.meadow, b = ctx.SONGS.fable2;
+    const flat = { A: 'Ab', E: 'Eb' };
+    let same = a.bpm === b.bpm && a.leadSteps.length === b.leadSteps.length, notes = 0;
+    a.leadSteps.forEach((tok, i) => {
+      const t2 = b.leadSteps[i];
+      if (tok === '.' || tok === '-') return void (same = same && t2 === tok);
+      notes++;
+      const m = /^([A-G])(\d)$/.exec(tok);
+      same = same && !!m && t2 === (flat[m[1]] || m[1]) + m[2];
+    });
+    check('Desert Mirage plays the Puffball Circuit tune in maqam hijaz (same rhythm and tempo)', same && notes > 20, `${notes} notes compared`);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // The big screen loads every script as a classic script into one global scope: two files
 // declaring the same top-level const/let/class name would stop the game from loading.
 {
