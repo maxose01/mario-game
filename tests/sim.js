@@ -91,6 +91,8 @@ for (const track of TRACKS) {
   // the winner's average speed must be believable whatever the course length
   const lo = race.goal / 34, hi = race.goal / 12.5;
   if (times.length) check(`${track}: race length is sensible`, times[0] > lo && times[0] < hi, `winner ${times[0].toFixed(1)}s, last ${times[times.length - 1].toFixed(1)}s, bounds ${lo.toFixed(0)}-${hi.toFixed(0)}s`);
+  // (a bot that keeps butting an obstacle never stands still for 3 s, so "nobody gets stuck" misses it)
+  if (times.length === 8) check(`${track}: no bot is held up for long`, times[7] < times[0] * 1.6, `last home in ${times[7].toFixed(1)}s, ${(times[7] / times[0]).toFixed(2)}x the winner`);
   const falls = stats.reduce((a, s) => a + s.falls, 0);
   check(`${track}: bots rarely fall off`, falls <= 8, `${falls} falls total`);
   const stuck = Math.max(...stats.map((s) => s.maxStill));
@@ -1012,6 +1014,25 @@ function run(race, secs, fn) {
     }
   }
   check('fablefair: the Rabbit Hole is level with the road wherever the two overlap', n > 100 && worst < 0.3, `${n} overlapping spots, worst step ${worst.toFixed(2)} at s ${where.toFixed(0)}`);
+
+  // A bot that comes out of the hole aims down the road ahead of it. (A kart past the end of a branch
+  // counts as still on it, with its s held at the end; the bot's aim point was held there too, so a
+  // kart that had driven on a few units had it behind it, circled the tunnel's mouth, then butted
+  // the hedge that waits there.)
+  const race = new Race({ track: 'fablefair', laps: 3, cc: 150, racers: [{ name: 'Bot', bot: true, config: { character: 'pepper' } }], seed: 3, items: false });
+  race.state = 'race';
+  const k = race.karts[0];
+  const mouth = b.point(b.length, 0);
+  k.setPos(mouth.x + mouth.tx * 22, mouth.y + 0.05, mouth.z + mouth.tz * 22, mouth.head);
+  k.vx = Math.cos(mouth.head) * 26;
+  k.vz = Math.sin(mouth.head) * 26;
+  k.path = b;
+  k.relocate();
+  race.brains[0].route = b;
+  run(race, 0.1);
+  const t = race.brains[0].target;
+  const aheadBy = (t.x - k.x) * Math.cos(k.head) + (t.z - k.z) * Math.sin(k.head);
+  check('fablefair: a bot past the Rabbit Hole\'s end aims ahead of itself', k.loc.path === b && k.loc.over > 15 && aheadBy > 12, `on ${k.loc.path.id}, ${k.loc.over.toFixed(0)} past its end, aim point ${aheadBy.toFixed(1)} units ahead`);
 }
 
 // Every song is well-formed: whole bars, lines of one length, drum patterns the length of the bar,

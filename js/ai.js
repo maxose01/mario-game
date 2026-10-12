@@ -86,8 +86,9 @@ class BotBrain {
     const tp = path.point(Math.min(path.closed ? s + look : path.length, s + look), lane * hw);
     let tx = tp.x, tz = tp.z;
     if (path.branch && s + look > path.length) {
-      // running off the end of a branch: aim down the main road after it
-      const ms = T.mainS(path, path.length) + (s + look - path.length);
+      // running off the end of a branch: aim down the main road after it (from where we are: a kart
+      // beyond the end still counts as on the branch, with s held at its end)
+      const ms = T.mainS(path, path.length) + (s + look - path.length) + (k.path === path ? k.loc.over || 0 : 0);
       const mp = T.main.point(ms, lane * T.main.hw[T.main.indexAt(ms)]);
       tx = mp.x;
       tz = mp.z;
@@ -411,14 +412,16 @@ class BotBrain {
           break; // a shove, not a blow: a bot just steers back to its line
         case 'thorn': {
           // (a row of clumps is dodged as one hedge, by the clump that speaks for it)
-          const row = h.path === path ? thornRow(items, h) : null;
-          if (!row || row.id !== h.id) break;
-          const ahead = row.s - s;
+          const row = thornRow(items, h);
+          if (row.id !== h.id) break;
+          let ahead = row.s - s;
+          // on a branch, a hedge on the main road it runs back into counts too, from afar
+          if (h.path !== path) ahead = path.branch && h.path === k.track.main ? path.length - s + (row.s - path.branch.toS) : -99;
           if (ahead < -2.5 || ahead > 44) break;
           if (!hedge || ahead < hedge.ahead) {
             hedge2 = hedge;
-            hedge = { row, ahead };
-          } else if (!hedge2 || ahead < hedge2.ahead) hedge2 = { row, ahead };
+            hedge = { row, ahead, path: h.path };
+          } else if (!hedge2 || ahead < hedge2.ahead) hedge2 = { row, ahead, path: h.path };
           break;
         }
         case 'acorntree':
@@ -429,20 +432,22 @@ class BotBrain {
           consider(h.x, h.z, (h.r || 1) + 0.5); // bumpers, poles
       }
     }
-    if (hedge) push += this.hedgeDodge(path, d, hedge, hedge2);
+    if (hedge) push += this.hedgeDodge(d / path.hw[path.indexAt(s)], hedge, hedge2);
     if (Math.abs(push) > 0.05) this.dodgeSide = Math.sign(push);
     return U.clamp(push, -0.9, 0.9);
   }
 
   // A hedge of thorns across part of the road: make for the open stretch beside it. (Nudging away
   // from each clump would cancel out between two of them.) When another hedge follows soon on the
-  // other side, hug this one's edge, so the S-bend through the two is a short one.
-  hedgeDodge(path, d, near, next) {
-    const a = hedgePass(path, near.row, d);
-    if (d < a.lo - 1.2 || d > a.hi + 1.2) return 0; // already clear of it
+  // other side, hug this one's edge, so the S-bend through the two is a short one. lane: where we
+  // are headed, as a fraction of the road's half-width; returns the change to it.
+  hedgeDodge(lane, near, next) {
+    const hw = near.path.hw[near.path.indexAt(near.row.s)], at = lane * hw;
+    const a = hedgePass(near.path, near.row, at);
+    if (at < a.lo - 1.2 || at > a.hi + 1.2) return 0; // already clear of it
     let goal = a.mid;
-    if (next && next.row.s - near.row.s < 70 && hedgePass(path, next.row, a.edge).side !== a.side) goal = a.edge + a.side * 0.9;
-    return (goal - d) / a.hw;
+    if (next && next.path === near.path && next.row.s - near.row.s < 70 && hedgePass(near.path, next.row, a.edge).side !== a.side) goal = a.edge + a.side * 0.9;
+    return (goal - at) / hw;
   }
 
   thinkItems(dt, path, s) {

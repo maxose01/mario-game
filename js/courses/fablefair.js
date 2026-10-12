@@ -118,6 +118,7 @@
     name: 'Fable Fair',
     blurb: 'A fairy-tale fair in the clouds in three laps: an enchanted forest, a desert of rides and a night-sky dream.',
     music: 'fable1',
+    staff: { 150: 92.6, 200: 79.7 },
     difficulty: 3,
     theme: 'fairy',
     p2p: true,
