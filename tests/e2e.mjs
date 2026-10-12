@@ -361,11 +361,13 @@ try {
     const badge = document.getElementById('healthBtn');
     return {
       auto: App.race.karts[Party.players[1].kartIdx].auto, age: Party.players[1].inputAge, ana: App.race.karts[Party.players[0].kartIdx].auto,
-      msg: e && e.msg, phone: e && e.data && e.data.phone, toast: App.toastMsg && App.toastMsg.text, badge: !badge.hidden && badge.textContent,
+      msg: e && e.msg, phone: e && e.data && e.data.phone, toast: App.toastMsg && App.toastMsg.text,
+      problems: Monitor.problems, badge: !badge.hidden, log: !!document.getElementById('epHealth').offsetParent,
     };
   });
   check('the big screen hands a silent phone\'s kart to the autopilot after 1.5 s', stall.auto && stall.age > 1.5 && !stall.ana, JSON.stringify(stall));
-  check('...tells the room and logs it, with what the phone last said it was doing', /^P2 Bo: no signal from the phone/.test(stall.msg) && stall.toast === stall.msg && /^⚠ \d+$/.test(stall.badge) && !!stall.phone && !!stall.phone.pad && stall.phone.pad.steer === 'drag', JSON.stringify(stall));
+  check('...tells the room and logs it, with what the phone last said it was doing', /^P2 Bo: no signal from the phone/.test(stall.msg) && stall.toast === stall.msg && !!stall.phone && !!stall.phone.pad && stall.phone.pad.steer === 'drag', JSON.stringify(stall));
+  check('...but the health log stays out of sight (no ⚠ badge, no log in the Edit Panel) unless developer mode is on', stall.problems > 0 && !stall.badge && !stall.log, JSON.stringify(stall));
   // now Bo's phone notices its pings go unanswered: it rebuilds the link and takes the kart back
   await bo.evaluate(() => (P.lastPong = performance.now()));
   await host.waitForFunction(() => Party.players[1].connected && !App.race.karts[Party.players[1].kartIdx].auto && Monitor.entries.some((e) => e.kind === 'phone-relink'), null, { timeout: 30000 }).catch(() => {});
@@ -566,6 +568,15 @@ try {
   const kinds = await host.evaluate(() => Monitor.entries.map((e) => e.kind));
   check('script errors on a phone and on the big screen go into the health log', kinds.includes('phone-error') && kinds.includes('exception'), kinds.join());
   check('every race is summed up in the log, the abandoned ones too', kinds.includes('race-start') && kinds.includes('race-end') && kinds.includes('race-restart') && kinds.includes('race-quit'), kinds.join());
+  // developer mode (off by default) is what shows the log: its switch is in the Edit Panel
+  await host.click('#editToggle');
+  const dev0 = await host.evaluate(() => ({ dev: Monitor.dev, stored: localStorage.getItem('claykart.dev.v1'), log: !!document.getElementById('epHealth').offsetParent, badge: !document.getElementById('healthBtn').hidden, on: document.getElementById('epDev').checked, switch: !!document.getElementById('epDev').offsetParent }));
+  check('developer mode is off by default: the switch is in the Edit Panel, the health log and the ⚠ badge are not shown', !dev0.dev && !dev0.stored && !dev0.log && !dev0.badge && !dev0.on && dev0.switch, JSON.stringify(dev0));
+  await host.click('#epDev');
+  await host.waitForSelector('#epHealthList li', { timeout: 5000 }).catch(() => {});
+  const dev1 = await host.evaluate(() => ({ dev: Monitor.dev, stored: localStorage.getItem('claykart.dev.v1'), log: !!document.getElementById('epHealth').offsetParent, badge: document.getElementById('healthBtn').hidden ? '' : document.getElementById('healthBtn').textContent }));
+  check('switching developer mode on shows the health log and the ⚠ badge, and the browser remembers it', dev1.dev && dev1.log && /^⚠ \d+$/.test(dev1.badge) && dev1.stored === 'true', JSON.stringify(dev1));
+  await host.click('#epClose');
   await host.click('#healthBtn');
   await host.waitForSelector('#epHealthList li', { timeout: 5000 }).catch(() => {});
   const listed = await host.evaluate(() => ({ open: EditPanel.open, items: [...document.querySelectorAll('#epHealthList li')].map((li) => li.textContent) }));
@@ -577,6 +588,23 @@ try {
   const file = healthLog();
   const filed = file.map((e) => e.kind);
   check('the party server appends the problems to logs/health.jsonl', ['input-stall', 'phone-relink', 'phone-error', 'exception', 'race-restart', 'race-quit'].every((k) => filed.includes(k)) && file.every((e) => e.at && e.level && e.msg && e.from) && !filed.includes('race-start'), filed.join());
+  // switched off again, the log is hidden (but goes on being kept), and so is the note on the results
+  await host.click('#editToggle');
+  await host.click('#epDev');
+  const dev2 = await host.evaluate(() => ({ dev: Monitor.dev, stored: localStorage.getItem('claykart.dev.v1'), log: !!document.getElementById('epHealth').offsetParent, badge: !document.getElementById('healthBtn').hidden, entries: Monitor.entries.length }));
+  check('switching developer mode off hides the health log and the ⚠ badge again, but the entries are kept', !dev2.dev && dev2.stored === 'false' && !dev2.log && !dev2.badge && dev2.entries > 5, JSON.stringify(dev2));
+  const note = await host.evaluate(() => {
+    const end = () => {
+      Monitor.race = { track: 'meadow', start: performance.now() - 3000, problems: ['stuck'], hitches: 0, frames: 30, worstFrame: 0.02, silent: new Set(), worstGap: {} };
+      return Monitor.raceEnd({ track: { def: { name: 'Test course' } }, raceTime: 1, timedOut: false, humans: [] });
+    };
+    const off = end();
+    Monitor.setDev(true);
+    const on = end();
+    Monitor.setDev(false);
+    return { off, on };
+  });
+  check('the results mention the health log only in developer mode', note.off === '' && /^⚠ 1 problem this race went into the health log/.test(note.on), JSON.stringify(note));
 } catch (e) {
   check('test run completed without exceptions', false, e.message);
 } finally {

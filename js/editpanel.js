@@ -150,10 +150,10 @@ const EditPanel = {
     $('epImport').addEventListener('click', () => this.importJSON());
   },
 
-  // The newest health log entries (see js/monitor.js).
+  // The newest health log entries (see js/monitor.js); the log is only shown in developer mode.
   renderHealth() {
     const list = $('epHealthList');
-    if (!list) return;
+    if (!list || !Monitor.dev) return;
     list.innerHTML = '';
     const recent = Monitor.entries.slice(-30).reverse();
     if (!recent.length) list.appendChild(el('li', '', 'Nothing logged yet.'));

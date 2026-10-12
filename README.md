@@ -226,8 +226,8 @@ It also has feel presets (Drift King, 200cc Rush, Ice Rink, Moon Clay, Item Fren
 a live readout (FPS, resolution, speed, surface, drift charge, boost, place, lap or section,
 road position), playtest tools (give any item, hand out keys, open every gate, star power, max
 coins, skip a lap (on a point-to-point run: skip to the next checkpoint), finish the race, +100
-garage coins, unlock every part, autopilot), the health log and JSON copy/paste for sharing
-tweaks.
+garage coins, unlock every part, autopilot), the health log (only in developer mode, a switch
+at the bottom of the panel) and JSON copy/paste for sharing tweaks.
 
 ## Health log
 
@@ -246,8 +246,12 @@ The big screen keeps an eye on everything that can stop someone from finishing a
 | `hitches` | the big screen stuttered (frames over 250 ms) a lot in one race |
 | `race-start`, `race-end`, `race-quit`, `race-restart` | each race, with a summary: frame rate, the worst input gap per phone, who finished, and the problems |
 
-Problems pop up on the big screen as a message and a **⚠** badge in the top bar, which opens the
-log in the Edit Panel (**Download log** saves it as JSON, **Clear log** empties it). Entries
+Problems pop up on the big screen as a message. The log itself is only shown in **developer
+mode**, a switch in the Edit Panel (below the playtest tools; off by default and remembered in
+the browser). With it on, a **⚠** badge appears in the top bar and opens the log in the Edit
+Panel (**Download log** saves it as JSON, **Clear log** empties it), and the results screen says
+how many problems the race put into it. The log is kept either way, so it is complete when you
+switch developer mode on, and the server's file (below) is not affected. Entries
 about a kart carry a snapshot of it (position on the course, speed, controls, autopilot) and of
 its phone's link (seconds since its last input, round trip, and what the controller last said
 it was doing: seconds since the last touch, steering, buttons held, any menu open, data stuck in
@@ -361,9 +365,10 @@ npm run test:e2e     # big screen + two phones in Chromium (needs Playwright)
   carries on, restarts and quits from the leader's phone, stalls one phone's link without a
   word (the big screen must hand its kart to the autopilot, say so and log it, and the phone
   must rebuild its link and take the kart back), reconnects a phone while the results are up
-  (same seat, its result again), and checks the health log: script errors from a phone and the
-  big screen, race summaries, the ⚠ badge opening the log, the copy in the browser and the
-  server's `logs/health.jsonl` (written to a scratch folder during the test).
+  (same seat, its result again), and checks the health log: it stays hidden until developer
+  mode is switched on (and hides again when it is switched off), then script errors from a
+  phone and the big screen, race summaries, the ⚠ badge opening the log, the copy in the browser
+  and the server's `logs/health.jsonl` (written to a scratch folder during the test).
 - `tests/shots.mjs` photographs a course for eyeballing scenery, hazards and effects:
 
   ```sh

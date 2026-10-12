@@ -10,17 +10,22 @@
 //   exception     a script error on the big screen; phone-error: one on a phone
 //   phone-relink  a phone rebuilt a link that stopped answering
 //   hitches       frames over 250 ms, counted per race (a struggling screen)
-// Each race ends with a summary. Problems pop up on the big screen (a toast and the ⚠ badge
-// in the top bar, which opens the log in the Edit Panel), are kept in this browser (the last
-// 400 entries) and, when the party server is running, appended to logs/health.jsonl next to
-// server.js, which also prints them in its terminal.
+// Each race ends with a summary. Problems pop up on the big screen (a toast and, in developer
+// mode, the ⚠ badge in the top bar, which opens the log in the Edit Panel), are kept in this
+// browser (the last 400 entries) and, when the party server is running, appended to
+// logs/health.jsonl next to server.js, which also prints them in its terminal.
+// The log is only shown in developer mode (a switch in the Edit Panel, off by default): the
+// badge, the Edit Panel's log and the note on the results screen all wait for it. Logging goes on
+// either way, so the log is complete when it is switched on.
 // It costs next to nothing: checks run four times a second over the human karts only, and
 // storage and the network are touched only when something is logged.
 
 const HEALTH_KEY = 'claykart.health.v1';
 const HEALTH_MAX = 400;
+const DEV_KEY = 'claykart.dev.v1';
 
 const Monitor = {
+  dev: false, // developer mode: the health log is only shown with it on
   entries: [],
   problems: 0, // warnings and errors since the big screen started
   race: null, // this race's tally
@@ -42,6 +47,23 @@ const Monitor = {
       const card = $('epHealth');
       if (card) card.scrollIntoView({ block: 'start' });
     });
+    $('epDev').addEventListener('change', () => this.setDev($('epDev').checked));
+    this.dev = Store.get(DEV_KEY, false) === true;
+    this.showDev();
+  },
+
+  // Developer mode on or off (remembered in this browser).
+  setDev(on) {
+    this.dev = !!on;
+    Store.set(DEV_KEY, this.dev);
+    this.showDev();
+  },
+  // Show or hide what depends on it: the switch itself, the Edit Panel's log and the ⚠ badge.
+  showDev() {
+    $('epDev').checked = this.dev;
+    $('epHealth').hidden = !this.dev;
+    this.badge();
+    if (this.dev && EditPanel.open) EditPanel.renderHealth();
   },
 
   // Log something. level: 'info' | 'warn' | 'error'. notify: also tell the room (a toast).
@@ -201,12 +223,12 @@ const Monitor = {
       this.schedule();
     }
     if (r.hitches > Math.max(10, secs / 6)) this.note('warn', 'hitches', `The big screen stuttered ${r.hitches} times this race (frames over 250 ms): try a lower render scale in the Edit Panel`, { hitches: r.hitches, worstFrameMs: Math.round(r.worstFrame * 1000) });
-    return n ? `⚠ ${n} problem${n > 1 ? 's' : ''} this race went into the health log (the ⚠ badge, top right)` : '';
+    return n && this.dev ? `⚠ ${n} problem${n > 1 ? 's' : ''} this race went into the health log (the ⚠ badge, top right)` : '';
   },
 
   badge() {
     const b = $('healthBtn');
-    b.hidden = this.problems === 0;
+    b.hidden = !this.dev || this.problems === 0;
     b.textContent = `⚠ ${this.problems}`;
     b.title = `${this.problems} problem${this.problems > 1 ? 's' : ''} logged: open the health log`;
   },
