@@ -615,6 +615,28 @@ const SFX = {
     s.noise(0.18, { filter: 'highpass', freq: 3500, vol: 0.12 });
     for (let i = 0; i < 3; i++) s.tone(480 + Math.random() * 600, 0.07, { type: 'sine', slide: 1500, vol: 0.06, delay: 0.08 + i * 0.07 });
   },
+  // ---- Fable Fair ----
+  // a water jet gurgling before it blasts: a handful of bubbles bloop up the scale
+  jetwarn: (s) => {
+    for (let i = 0; i < 5; i++) s.tone(260 + Math.random() * 200, 0.08, { type: 'sine', slide: 520 + Math.random() * 360, vol: 0.075, delay: i * 0.075 });
+    s.noise(0.45, { filter: 'bandpass', freq: 420, slide: 900, q: 1.2, vol: 0.05, attack: 0.1 });
+  },
+  // ...and then a sheet of water across the road
+  jet: (s) => {
+    s.noise(0.9, { filter: 'bandpass', freq: 700, slide: 2600, q: 0.8, vol: 0.2, attack: 0.07 });
+    s.noise(0.7, { filter: 'highpass', freq: 3200, vol: 0.06, attack: 0.05, delay: 0.05 });
+    s.tone(120, 0.5, { type: 'sine', slide: 70, vol: 0.12 });
+  },
+  // an acorn landing on the road: a wooden knock and a soft thud
+  acorn: (s) => {
+    s.tone(560, 0.07, { type: 'triangle', slide: 250, vol: 0.2 });
+    s.tone(190, 0.13, { type: 'sine', slide: 85, vol: 0.2 });
+    s.noise(0.05, { freq: 1900, vol: 0.07 });
+  },
+  // the talking tree: a grumbly babble of three syllables
+  treetalk: (s) => {
+    [[0, 170, 230, 150], [0.24, 150, 210, 140], [0.5, 190, 260, 160]].forEach(([d, a, b, c]) => s.bend(0.2, { type: 'sawtooth', pitch: [[0, a], [0.09, b], [0.2, c]], cutoff: [[0, 500], [0.2, 1100]], q: 2, vol: 0.05, delay: d, release: 0.12 }));
+  },
   // off a mogul or a ramp lip (they come often, so barely there)
   launch: (s) => s.tone(240, 0.1, { type: 'triangle', slide: 430, vol: 0.035 }),
 };

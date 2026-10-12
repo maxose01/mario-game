@@ -598,6 +598,90 @@ function run(race, secs, fn) {
   check('a falling icicle shatters on a kart', r.has('icicle') && r.hit('icicle'));
   r = tryHazard({ kind: 'pole', d: 0 }, 1.5, true);
   check('a slalom pole is solid', !r.past && !r.has('hit'));
+  r = tryHazard({ kind: 'thorn', d: 0 }, 1.5, true);
+  check('a thorn hedge is solid', !r.past && !r.has('hit'));
+  // Fable Fair's hazards: a water jet shoves (never spins) a kart away from its wall, on a steady
+  // beat that gurgles first; a talking tree chatters before its acorns land
+  let jet = tryHazard({ kind: 'jet', d: -11, period: 3.2 }, 3.4, false);
+  check('a water jet on the left wall shoves a kart to the right, without a spin-out', jet.has('jet') && jet.has('jetpush') && jet.k.loc.d > 2.5 && !jet.has('hit'), `moved to d ${jet.k.loc.d.toFixed(1)}`);
+  jet = tryHazard({ kind: 'jet', d: 11, period: 3.2 }, 3.4, false);
+  check('and one on the right wall shoves it to the left', jet.k.loc.d < -2.5 && !jet.has('hit'), `moved to d ${jet.k.loc.d.toFixed(1)}`);
+  {
+    // the beat: gurgle first (warning), the same time between blasts, off in between
+    const race = soloRace('mount');
+    race.state = 'race';
+    const p0 = M.main.point(S, -11);
+    const h = race.items.makeHazard({ kind: 'jet', d: -11, period: 3.2, phase: 0.2, x: p0.x, y: p0.y, z: p0.z, head: p0.head, path: M.main, s: S }, 0);
+    race.items.hazards = [h];
+    placeOn(race, S + 60, 0, 0); // far away
+    const warnAt = [], blastAt = [];
+    run(race, 10, () => {
+      if (h.warn && !warnAt.some((t) => race.time - t < 1)) warnAt.push(race.time);
+      if (h.power > 0.9 && !blastAt.some((t) => race.time - t < 1)) blastAt.push(race.time);
+    });
+    const lead = blastAt[0] - warnAt[0], beat = blastAt[1] - blastAt[0];
+    check('a water jet gurgles at least 0.7 s before it blasts, and the beat is steady', lead >= 0.7 && Math.abs(beat - 3.2) < 0.05 && blastAt.length >= 3, `warning ${lead.toFixed(2)} s, beat ${beat.toFixed(2)} s, ${blastAt.length} blasts`);
+  }
+  r = tryHazard({ kind: 'acorntree', d: 14, spots: [{ ds: 0, d: 0 }], period: 4.8 }, 5.6, false);
+  {
+    const acorn = r.ev.find((e) => e.type === 'acorn');
+    check('a talking tree drops an acorn on a kart under it', !!acorn && r.hit('acorn'), `${r.ev.filter((e) => e.type === 'acorn').length} acorn(s) landed`);
+  }
+  {
+    // chatter first: from the first word to the splat
+    const race = soloRace('mount');
+    race.state = 'race';
+    const p0 = M.main.point(S, 14);
+    const h = race.items.makeHazard({ kind: 'acorntree', d: 14, spots: [{ ds: 0, d: 0 }], period: 4.8, x: p0.x, y: p0.y, z: p0.z, head: p0.head, path: M.main, s: S }, 0);
+    race.items.hazards = [h];
+    placeOn(race, S + 60, 0, 0);
+    let t0 = null, t1 = null;
+    run(race, 6, () => {
+      if (h.talk && t0 === null) t0 = race.time;
+      if (h.spots[0].state === 'gone' && t1 === null) t1 = race.time;
+    });
+    check('a talking tree chatters for over a second before its acorn lands', t0 !== null && t1 !== null && t1 - t0 >= 1.2, `chatter ${t0 === null ? '-' : t0.toFixed(2)} s, splat ${t1 === null ? '-' : t1.toFixed(2)} s`);
+  }
+  // fairness on every course: wherever thorns or acorns block part of the road, a kart can
+  // always drive through the rest (a gap at least 3 units wide for its centre), and every timed
+  // hazard warns first
+  {
+    let worst = Infinity, where = '', rows = 0;
+    for (const track of TRACKS) {
+      const T = getTrack(track);
+      const blockers = [];
+      for (const h of T.objects.hazards) {
+        if (h.kind === 'thorn') blockers.push({ s: h.s, path: h.path, d: h.d || 0, R: (h.r || 1.6) + 0.9, id: track + ' thorn' });
+        if (h.kind === 'acorntree') for (const sp of h.spots || [{ ds: 0, d: 0 }]) blockers.push({ s: h.s + (sp.ds || 0), path: h.path, d: sp.d || 0, R: (h.r || 2.2) + 0.9, id: track + ' acorn' });
+      }
+      for (const b of blockers) {
+        rows++;
+        const same = blockers.filter((o) => o.path === b.path && Math.abs(o.s - b.s) < 3);
+        const i = b.path.indexAt(b.s), lim = b.path.hw[i] + b.path.sh[i] - 0.8;
+        // the largest free stretch for the kart's centre between the blocked intervals
+        const iv = same.map((o) => [o.d - o.R, o.d + o.R]).sort((a, c) => a[0] - c[0]);
+        let free = 0, cursor = -lim;
+        for (const [a, c] of iv) {
+          free = Math.max(free, a - cursor);
+          cursor = Math.max(cursor, c);
+        }
+        free = Math.max(free, lim - cursor);
+        if (free < worst) {
+          worst = free;
+          where = `${b.id} at s ${b.s.toFixed(0)}`;
+        }
+      }
+    }
+    check('thorn hedges and acorn spots always leave a gap to drive through', rows === 0 || worst >= 3, rows ? `narrowest gap ${worst.toFixed(1)} units (${where}), ${rows} blockers` : 'no thorns or acorns on any course yet');
+    let shortest = Infinity;
+    for (const track of TRACKS) {
+      for (const h of getTrack(track).objects.hazards) {
+        if (h.kind === 'jet') shortest = Math.min(shortest, (h.period || 3.2) * 0.26);
+        if (h.kind === 'acorntree') shortest = Math.min(shortest, (h.period || 4.8) * 0.36);
+      }
+    }
+    check('water jets and talking trees warn for at least 0.7 s first', shortest >= 0.7, shortest === Infinity ? 'none on any course yet' : `shortest warning ${shortest.toFixed(2)} s`);
+  }
   // a star shatters a snowball instead
   const st = tryHazard({ kind: 'roller', d: 0, range: 0.3 }, 0, true);
   st.k.starT = 5;

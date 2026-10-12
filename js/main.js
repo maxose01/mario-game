@@ -647,6 +647,21 @@ const App = {
         case 'icicle':
           if (this.near(e.a, 40)) Sound.play('icicle');
           break;
+        case 'jetwarn':
+          if (this.near(e.a, 45)) Sound.play('jetwarn');
+          break;
+        case 'jet':
+          if (this.near(e.a, 55)) Sound.play('jet');
+          break;
+        case 'jetpush':
+          if (mine) Sound.play('splash');
+          break;
+        case 'acorn':
+          if (this.near(e.a, 45)) Sound.play('acorn');
+          break;
+        case 'treetalk':
+          if (this.near(e.a, 55)) Sound.play('treetalk');
+          break;
         case 'bump':
           if (mine || (e.a && !e.a.bot)) Sound.play('bump');
           break;

@@ -18,7 +18,7 @@ const HAPTIC_SLIPS = { banana: 1, penguin: 1, skier: 1 };
 // anti-gravity spins have shots of their own.
 const HAPTIC_BOOSTS = { pad: ['boost', 0.6], mushroom: ['boost', 0.9], trick: ['boost', 0.5], turbo1: ['turbo', 0.35], turbo2: ['turbo', 0.6], turbo3: ['turbo', 0.9] };
 // Shocks felt from nearby (events without a kart): how far they reach.
-const HAPTIC_NEAR = { stomp: 18, blast: 30, geyser: 14, icicle: 12, mole: 8 };
+const HAPTIC_NEAR = { stomp: 18, blast: 30, geyser: 14, icicle: 12, mole: 8, acorn: 12 };
 // Road styles that rumble under the tyres: [base amplitude, extra at full speed, pulse rate in Hz
 // (0 = one pulse per plank at the kart's speed), irregularity].
 const HAPTIC_ROADS = { wood: [0.2, 0.25, 0, 0.1], stone: [0.1, 0.15, 16, 0.35], dirt: [0.18, 0.22, 11, 0.5], snow: [0.06, 0.1, 14, 0.4] };
@@ -127,6 +127,8 @@ class HapticTracker {
         return this.shot('locked', 0.7);
       case 'bumper':
         return this.shot('bumper', 0.9);
+      case 'jetpush':
+        return this.shot('bump', 0.45); // the shove of a water jet
       case 'squash':
         return this.shot('squash', 0.6);
       case 'finish':

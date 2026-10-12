@@ -956,6 +956,17 @@ class RaceFX {
           this.burst(this.glow, e.a.x, e.a.y + 0.6, e.a.z, 10, ['#ffffff', '#bfeaff'], 5, 0.12, 0.4, 6);
         }
         break;
+      case 'acorn':
+        // an acorn splats on the road: shell, leaves and a puff of dust
+        if (e.a) {
+          this.burst(this.clay, e.a.x, e.a.y + 0.4, e.a.z, 18, ['#b27a3e', '#6b4a2a', '#8ac05a'], 7, 0.3, 0.8, 16);
+          this.burst(this.glow, e.a.x, e.a.y + 0.5, e.a.z, 8, ['#fff3b0', '#ffffff'], 4, 0.12, 0.4, 6);
+        }
+        break;
+      case 'jetpush':
+        // a kart caught in a jet's spray
+        if (k) this.burst(this.glow, k.x, k.y + 0.8, k.z, 14, ['#ffffff', '#bfeaff', '#9fdcff'], 6, 0.14, 0.6, 12);
+        break;
     }
   }
 }

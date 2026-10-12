@@ -18,9 +18,9 @@ const ITEM_TABLE = [
 ];
 
 // Hazards that block karts and stop shells.
-const SOLID_HAZARDS = { snowman: 1, stomper: 1, cow: 1, bumper: 1, pole: 1, roller: 1 };
+const SOLID_HAZARDS = { snowman: 1, stomper: 1, cow: 1, bumper: 1, pole: 1, roller: 1, thorn: 1 };
 // How tall each hazard stands: a kart flying higher than this over it sails clear.
-const HAZARD_TALL = { penguin: 1.6, skier: 2.2, cow: 2.6, mole: 1.6, bumper: 2.2, pole: 3.5 };
+const HAZARD_TALL = { penguin: 1.6, skier: 2.2, cow: 2.6, mole: 1.6, bumper: 2.2, pole: 3.5, thorn: 2.4 };
 const ICICLE_LEN = 2.6; // length of a full-grown icicle
 
 function rollItem(place, count, rnd) {
@@ -81,6 +81,13 @@ class ItemSystem {
   //                                                          state (hang, warn, fall, gone,
   //                                                          grow), drop (tip height), grow
   //   pole     r [0.35], color                               -
+  //   thorn    r [1.6]                                       - (a clump of the sleeping castle's thorny hedge: solid)
+  //   jet      period [3.2], phase, width [5] (how far along the road its spray reaches), push [8]
+  //            (units/s it shoves a kart sideways, away from the wall it sits on), height [3.4]
+  //                                                          power (0..1), warn, warnU (0..1 through the gurgle)
+  //   acorntree  period [4.8], phase, ceil [8] (height of the boughs), spots [{ds, d}] (where acorns
+  //            land, ds along the road from the tree's place and d across), r [2.2] (splat radius)
+  //                                                          talk, talkU, spots[{x, y, z, state, drop, grow}]
   // All take d (lateral offset of the base). Phases are fractions of a period.
   makeHazard(h, i) {
     const o = Object.assign({ id: i, alive: true, deadT: 0 }, h);
@@ -189,6 +196,35 @@ class ItemSystem {
       case 'pole':
         def('r', 0.35);
         break;
+      case 'thorn':
+        def('r', 1.6);
+        break;
+      case 'jet':
+        def('period', 3.2);
+        def('phase', 0);
+        def('width', 5);
+        def('push', 8);
+        def('height', 3.4);
+        o.r = 1;
+        o.side = (h.d || 0) < 0 ? -1 : 1; // which wall the nozzle is on: the water shoves away from it
+        o.power = 0;
+        o.warn = false;
+        o.warnU = 0;
+        o.blast = 0; // counts the blasts, so each kart is told once per shove
+        break;
+      case 'acorntree': {
+        def('period', 4.8);
+        def('phase', 0);
+        def('ceil', 8);
+        o.r = 2.2;
+        o.talk = false;
+        o.talkU = 0;
+        o.spots = (h.spots || [{ ds: 0, d: 0 }]).map((sp) => {
+          const q = h.path.point(h.s + (sp.ds || 0), sp.d || 0);
+          return { x: q.x, y: q.y, z: q.z, state: 'hang', drop: o.ceil - ICICLE_LEN, grow: 1 };
+        });
+        break;
+      }
     }
     return o;
   }
@@ -196,6 +232,7 @@ class ItemSystem {
   // ---------- per step ----------
   update(dt) {
     const race = this.race;
+    this.dt = dt;
     for (const b of this.boxes) {
       b.spin += dt * 1.6;
       if (!b.active && (b.t -= dt) <= 0) b.active = true;
@@ -574,6 +611,12 @@ class ItemSystem {
         case 'icicle':
           this.cycleIcicle(h, t);
           break;
+        case 'jet':
+          this.cycleJet(h, t);
+          break;
+        case 'acorntree':
+          this.cycleAcornTree(h, t);
+          break;
       }
       // how fast it is moving (world units per second)
       h.vx = (h.x - px) / dt;
@@ -743,6 +786,98 @@ class ItemSystem {
     h.drop = drop;
     h.grow = grow;
   }
+  // A water jet on a canyon wall: it gurgles (warn: bubbles at the nozzle, warnU 0..1 through
+  // the build-up), blasts a sheet of water across the road (power 0..1) and dies down. The beat
+  // is steady (a left jet and a right jet half a period apart make a rhythm you can learn).
+  cycleJet(h, t) {
+    const u = (((t / h.period + h.phase) % 1) + 1) % 1;
+    const e0 = 0.66, e1 = 0.94;
+    let power = 0;
+    if (u >= e0 && u < e1) {
+      const v = (u - e0) / (e1 - e0);
+      power = v < 0.14 ? v / 0.14 : v > 0.72 ? (1 - v) / 0.28 : 1;
+    }
+    if (!h.alive) power = 0;
+    const warn = h.alive && u >= 0.4 && u < e0;
+    h.warnU = warn ? (u - 0.4) / (e0 - 0.4) : 0;
+    if (warn && !h.warn) this.race.emit('jetwarn', null, h);
+    if (h.power <= 0 && power > 0) {
+      h.blast++;
+      this.race.emit('jet', null, h);
+    }
+    h.warn = warn;
+    h.power = power;
+  }
+  // A kart in the spray is shoved sideways, away from the wall the jet sits on: it is carried
+  // across the road (like a current, but across it) and picks up some sideways speed, so a
+  // shove that ends against the far wall knocks it. Never a spin-out. Stars shrug it off, and a
+  // kart flying above the spray sails over.
+  jetPush(h, k) {
+    if (h.power < 0.12 || k.starT > 0 || k.falling) return;
+    const loc = k.loc;
+    if (!loc || loc.path !== h.path || loc.excess > 0.5) return;
+    if (Math.abs(loc.s - h.s) > h.width / 2 || k.y > h.y + h.height) return;
+    const dir = -h.side, dt = this.dt || 1 / 60;
+    const carry = h.push * 0.65 * h.power * dt;
+    k.x += loc.nx * dir * carry;
+    k.z += loc.nz * dir * carry;
+    const accel = h.push * 0.35 * CFG.grip * h.power * dt;
+    k.vx += loc.nx * dir * accel;
+    k.vz += loc.nz * dir * accel;
+    if (k.jetBlast !== h.id * 1000 + h.blast) {
+      k.jetBlast = h.id * 1000 + h.blast;
+      this.race.emit('jetpush', k, h);
+    }
+  }
+
+  // A talking tree beside the road: it chatters for a while (talk, talkU 0..1: mouth, bubble and
+  // the marks on the road where its acorns will land), then lets go of them one after another.
+  // Each acorn falls (state 'fall', drop = its height), splats on the road (gone) and a new one
+  // grows (grow 0..1) on the bough. Whoever stands in the splat is hit (see acornImpact).
+  cycleAcornTree(h, t) {
+    const u = (((t / h.period + h.phase) % 1) + 1) % 1;
+    const talk0 = 0.26, talk1 = 0.62, fall = 0.11, gap = 0.07;
+    const talk = h.alive && u >= talk0 && u < talk1;
+    if (talk && !h.talk) this.race.emit('treetalk', null, h);
+    h.talk = talk;
+    h.talkU = talk ? (u - talk0) / (talk1 - talk0) : 0;
+    const hang = h.ceil - ICICLE_LEN;
+    h.spots.forEach((sp, i) => {
+      const f0 = talk1 + i * gap;
+      let state = 'hang', drop = hang, grow = 1;
+      if (u >= f0 && u < f0 + fall) {
+        const ft = ((u - f0) * h.period) / Math.max(0.05, CFG.hazardSpeed);
+        drop = Math.max(0, hang - 0.5 * 42 * ft * ft);
+        state = drop > 0 ? 'fall' : 'gone';
+      } else if (u >= f0 + fall && u < 0.9) {
+        state = 'gone';
+        drop = 0;
+        grow = 0;
+      } else if (u >= 0.9) {
+        state = 'grow';
+        grow = (u - 0.9) / 0.1;
+        drop = h.ceil - ICICLE_LEN * grow;
+      } else if (h.talk) state = 'warn';
+      if (state === 'gone' && drop <= 0) grow = 0;
+      if (!h.alive) {
+        state = 'gone';
+        grow = 0;
+      }
+      if (sp.state === 'fall' && state !== 'fall') this.acornImpact(h, sp);
+      sp.state = state;
+      sp.drop = drop;
+      sp.grow = grow;
+    });
+  }
+  acornImpact(h, sp) {
+    this.race.emit('acorn', null, sp);
+    for (const k of this.race.karts) {
+      if (k.ghost || k.falling) continue;
+      if ((k.x - sp.x) ** 2 + (k.z - sp.z) ** 2 > h.r * h.r || Math.abs(k.y - sp.y) > 3) continue;
+      k.spinOut(CFG.spinOutTime * 0.85, 'acorn');
+    }
+  }
+
   icicleImpact(h) {
     this.race.emit('icicle', null, h);
     for (const k of this.race.karts) {
@@ -774,6 +909,11 @@ class ItemSystem {
         continue;
       }
       if (h.kind === 'icicle') continue; // only hurts as it shatters (see cycleIcicle)
+      if (h.kind === 'acorntree') continue; // its acorns hurt as they land (see cycleAcornTree)
+      if (h.kind === 'jet') {
+        this.jetPush(h, k);
+        continue;
+      }
       const dx = k.x - h.x, dz = k.z - h.z;
       const d = Math.hypot(dx, dz);
       const R = (h.r || 1) + KART_R * 0.85;
@@ -794,6 +934,7 @@ class ItemSystem {
           if (h.lift > 1.8) continue; // drive underneath while it is up
           break;
         case 'snowman':
+        case 'thorn':
           if (k.starT > 0) {
             this.knockOut(h, k, 8);
             continue;

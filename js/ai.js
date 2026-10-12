@@ -406,6 +406,12 @@ class BotBrain {
         case 'icicle':
           if (h.state !== 'gone' && h.state !== 'grow') consider(h.x, h.z, 1.8);
           break;
+        case 'jet':
+          break; // a shove, not a blow: a bot just steers back to its line
+        case 'acorntree':
+          // the marks its acorns will land on, from when the tree starts chattering until they splat
+          for (const sp of h.spots) if (sp.state === 'warn' || sp.state === 'fall' || (h.talk && sp.state === 'hang')) consider(sp.x, sp.z, 2.4);
+          break;
         default:
           consider(h.x, h.z, (h.r || 1) + 0.5); // bumpers, poles
       }
