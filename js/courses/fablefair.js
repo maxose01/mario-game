@@ -130,6 +130,13 @@
     segments: road,
     branches: [{ id: 'burrow', name: 'Rabbit Hole', seg: at.hairpin, phi: 66, gate: 'auto', style: 'dirt', hw: 5.5, sh: 1.8 }],
     zones: [
+      // the candy trail by the gingerbread house: a slalom of sweet pads, each a short, small boost
+      // (they run on into one another if you follow the trail)
+      { kind: 'boost', look: 'candy', power: 0.5, seg: at.glade, t: 0.1, len: 5, d: 4, w: 4 },
+      { kind: 'boost', look: 'candy', power: 0.5, seg: at.glade, t: 0.45, len: 5, d: 0, w: 4 },
+      { kind: 'boost', look: 'candy', power: 0.5, seg: at.glade, t: 0.8, len: 5, d: -4, w: 4 },
+      { kind: 'boost', look: 'candy', power: 0.5, seg: at.esA, t: 0.12, len: 5, d: 0, w: 4 },
+      { kind: 'boost', look: 'candy', power: 0.5, seg: at.esA, t: 0.4, len: 5, d: 4, w: 4 },
       // the glider chasm (see the note at the top)
       { kind: 'boost', seg: at.glideRamp, t: 0.12, len: 7, d: 0, w: 26 },
       { kind: 'glide', seg: at.glideRamp, t: 0.5, len: 10, d: 0, w: 30, h: 1.4 },
@@ -165,7 +172,35 @@
       { path: 'burrow', u: 0.62, d: 0, n: 8, gap: 2.5 },
     ],
     keys: [{ seg: at.treeGlade, t: 0.5, d: -4.8, h: 1.3 }],
-    hazards: [],
-    landmarks: [],
+    hazards: [
+      // Lap 1: the talking tree drops its acorns on two marked spots by the key
+      { kind: 'acorntree', seg: at.treeGlade, t: 0.35, d: 16.5, spots: [{ ds: 3, d: -2.5 }, { ds: 11, d: 3.5 }], period: 5, ceil: 8 },
+      // the sleeping castle's briars have crept onto the road: each row blocks one half of it
+      { kind: 'thorn', seg: at.chicane1, t: 0.25, d: 2.2 },
+      { kind: 'thorn', seg: at.chicane1, t: 0.25, d: 4.8 },
+      { kind: 'thorn', seg: at.chicane1, t: 0.25, d: 7.4 },
+      { kind: 'thorn', seg: at.chicane1, t: 0.65, d: -2.2 },
+      { kind: 'thorn', seg: at.chicane1, t: 0.65, d: -4.8 },
+      { kind: 'thorn', seg: at.chicane1, t: 0.65, d: -7.4 },
+      { kind: 'thorn', seg: at.chicane2, t: 0.28, d: -2.2 },
+      { kind: 'thorn', seg: at.chicane2, t: 0.28, d: -4.8 },
+      { kind: 'thorn', seg: at.chicane2, t: 0.28, d: -7.4 },
+      { kind: 'thorn', seg: at.chicane2, t: 0.72, d: 2.2 },
+      { kind: 'thorn', seg: at.chicane2, t: 0.72, d: 4.8 },
+      { kind: 'thorn', seg: at.chicane2, t: 0.72, d: 7.4 },
+    ],
+    landmarks: [
+      { kind: 'gantry', seg: at.start, t: 0 },
+      { kind: 'banner', seg: at.start, t: 0.5, d: 0, text: 'FABLE FAIR', color: '#7a5ad0' },
+      // Lap 1
+      { kind: 'bigshroom', seg: at.bend1, t: 0.5, d: 24 },
+      { kind: 'gingerbread', seg: at.glade, t: 0.5, d: -28 },
+      { kind: 'bigshroom', seg: at.esB, t: 0.3, d: -26 },
+      { kind: 'tunnel', look: 'clog', seg: at.clog, t: 0.04, seg1: at.clog, t1: 0.96 },
+      { kind: 'sleepcastle', seg: at.hairpin, t: 0, ds: -30, d: 50, far: true },
+      { kind: 'briararch', seg: at.chicane2, t: 0.08 },
+      { kind: 'burrow', path: 'burrow', u: 0.5 },
+      { kind: 'bigshroom', seg: at.bend4, t: 0.5, d: 26 },
+    ],
   });
 })();

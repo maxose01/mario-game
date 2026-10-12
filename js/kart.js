@@ -156,7 +156,11 @@ class Kart {
 
     // ---- longitudinal ----
     if (this.onGround) {
-      if (surf === 'boost' && this.race.state === 'race') this.giveBoost(CFG.padBoostTime, 'pad');
+      if (surf === 'boost' && this.race.state === 'race') {
+        // a candy trail's pads give a share of a full pad's boost (zone.power)
+        const pad = this.track.zoneAt(loc, 'boost');
+        this.giveBoost(CFG.padBoostTime * ((pad && pad.power) || 1), 'pad');
+      }
       const accel = CFG.accel * this.race.cc.accel * this.tune.accel;
       if (this.boostT > 0 && vf < max) vf = Math.min(max, vf + CFG.boostAccel * dt);
       else if (gas && !brake) {

@@ -8,6 +8,36 @@
 //                         the canyon's rock, the coaster's rails and the ghost ship's hull.
 //   Lap 3 (theme dream):  pearl cloud road, puffy walls, moonflowers, crystal spires, star lamps.
 // Everything is built from lumpy clay primitives (GK) or painted on a canvas: no files.
+// Helpers shared by the Fable Fair scenery files (fablefair-*.js).
+const FableKit = {
+  // The angle from (x, z) toward the road at a landmark's spot (to turn buildings to face it).
+  facing(world, lm, x, z) {
+    const at = world.track.where(lm);
+    const road = at.path.point(at.s, 0);
+    return Math.atan2(road.z - z, road.x - x);
+  },
+  // Puffs of smoke that rise, swell and fade in a loop above (x, y, z).
+  smoke(world, x, y, z, size = 1, col = '#eeeef6') {
+    // soft unlit puffs (a lit clay puff turns dirty grey at dusk), each fading as it rises
+    const geo = worldGeo('fable:puff', () => GK.blob(1, 0.8, 1, '#ffffff', { seed: 7, lump: 0.25 }));
+    const puffs = [];
+    for (let k = 0; k < 6; k++) {
+      const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.8, depthWrite: false, fog: true }));
+      world.scene.add(m);
+      world.keep(m.material);
+      puffs.push(m);
+    }
+    world.anims.push((t) => {
+      puffs.forEach((m, k) => {
+        const u = (t * 0.22 + k / puffs.length) % 1;
+        m.position.set(x + Math.sin(u * 5 + k) * 0.6 + u * 3, y + u * 9, z + Math.cos(u * 4 + k) * 0.5);
+        m.scale.setScalar(size * (0.5 + u * 1.6) * Math.min(1, (1 - u) * 4));
+        m.material.opacity = 0.75 * Math.min(1, u * 6) * (1 - u * 0.8);
+      });
+    });
+  },
+};
+
 (() => {
   // ------------------------------------------------------------------------ road surfaces
   Object.assign(ROAD_TEXTURES, {

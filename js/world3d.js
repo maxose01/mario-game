@@ -47,12 +47,16 @@ const SHOULDER_COL = { wood: 'dirt', rainbow: '#fff3c4', metal: '#46506a', water
 //   THEME_WALLS[themeKey] = lookName     the wall look a theme gives roads that name none
 //   DECOR_PIECES[kind](rnd, seed, th)    a scenery piece for a theme's decor list (returns a geometry)
 //   LAMPS[themeKey](world)               {geo, glow, y, size, every}: the lamp post of a theme
+//   TUNNEL_LOOKS[look](p, ids, tu)       builds a {kind: 'tunnel', look} landmark over main-road samples ids
+//                                        (tu: {R(i) the tunnel's inner half-width, lm the spec}); the
+//                                        landmark's range is also kept free of wall and lamp posts
 const ROAD_TEXTURES = {};
 const CURB_STYLES = { road: true };
 const FLUSH_STYLES = {}; // road styles whose shoulder starts right at the road's edge (no gap between them)
 const THEME_WALLS = { meadow: 'hedge', snow: 'snow', lava: 'castle', alpine: 'snow' };
 const DECOR_PIECES = {};
 const LAMPS = {};
+const TUNNEL_LOOKS = {};
 
 // Wall looks: profile = [outward offset from the road edge, height] around the cross-section.
 const WALL_LOOKS = {
@@ -1862,6 +1866,15 @@ class World3D {
     const T = this.track;
     this.padTex = this.chevronTexture();
     const padMat = this.keep(new THREE.MeshStandardMaterial({ map: this.padTex, emissive: 0xff9a3c, emissiveIntensity: 0.6, emissiveMap: this.padTex, roughness: 0.5, transparent: true }));
+    // a candy trail's pads (zone look 'candy'): peppermint chevrons, sugar sprinkles, a pink glow
+    let candyMat = null;
+    const candyPad = () => {
+      if (!candyMat) {
+        this.candyTex = this.chevronTexture(true);
+        candyMat = this.keep(new THREE.MeshStandardMaterial({ map: this.candyTex, emissive: 0xff7fb4, emissiveIntensity: 0.5, emissiveMap: this.candyTex, roughness: 0.35, transparent: true }));
+      }
+      return candyMat;
+    };
     const iceMat = this.keep(Clay3D.material({ color: 0xd9f0ff, rough: 0.25, wobble: 0, transparent: true, opacity: 0.78, rim: 0.2 }));
     const mudMat = this.keep(Clay3D.material({ color: 0x7a4b30, rough: 0.9, wobble: 0.04, rim: 0.4 }));
     for (const p of T.paths) {
@@ -1870,14 +1883,15 @@ class World3D {
         const a = (pt) => Math.max(z.d0, -pt.hw - pt.sh), b = (pt) => Math.min(z.d1, pt.hw + pt.sh);
         const s0 = z.s0, s1 = z.s1;
         if (z.kind === 'boost') {
+          const candy = z.look === 'candy';
           const g = this.strip(p, s0, s1, a, b, 0.1, { vScale: 3 });
           // v runs along the pad: re-base so chevrons point forward
           const uv = g.attributes.uv;
           for (let v = 0; v < uv.count; v++) uv.setY(v, -uv.getY(v));
-          this.put(g, padMat, { cast: false, name: 'boost' });
-          this.put(this.strip(p, s0 - 1.5, s1 + 1.5, (pt) => a(pt) - 1.2, (pt) => b(pt) + 1.2, 0.16, { vNorm: true }), this.flatGlowMaterial('#ff9a3c', 0, true), { cast: false, receive: false });
+          this.put(g, candy ? candyPad() : padMat, { cast: false, name: 'boost' });
+          this.put(this.strip(p, s0 - 1.5, s1 + 1.5, (pt) => a(pt) - 1.2, (pt) => b(pt) + 1.2, 0.16, { vNorm: true }), this.flatGlowMaterial(candy ? '#ff7fb8' : '#ff9a3c', 0, true), { cast: false, receive: false });
           const c = p.point((s0 + s1) / 2, (z.d0 + z.d1) / 2);
-          this.glow(c.x, c.y + 0.7, c.z, Math.min(4, (z.d1 - z.d0) * 0.45 + 1.2), '#ffb35c', 1);
+          this.glow(c.x, c.y + 0.7, c.z, Math.min(4, (z.d1 - z.d0) * 0.45 + 1.2), candy ? '#ff9ccb' : '#ffb35c', 1);
         } else if (z.kind === 'ice') {
           this.put(this.strip(p, s0, s1, a, b, 0.09, { across: 4, vScale: 6 }), iceMat, { cast: false, name: 'ice' });
         } else if (z.kind === 'mud') {
@@ -1950,11 +1964,11 @@ class World3D {
     }
   }
 
-  chevronTexture() {
+  chevronTexture(candy) {
     return this.canvasTex(64, 64, (g) => {
-      g.fillStyle = '#ff8a3d';
+      g.fillStyle = candy ? '#fff0f6' : '#ff8a3d';
       g.fillRect(0, 0, 64, 64);
-      g.fillStyle = '#ffe066';
+      g.fillStyle = candy ? '#ff4f93' : '#ffe066';
       g.beginPath();
       g.moveTo(8, 50);
       g.lineTo(32, 18);
@@ -1964,6 +1978,26 @@ class World3D {
       g.lineTo(20, 50);
       g.closePath();
       g.fill();
+      if (candy) {
+        // a glossy white stripe along the chevron and a few sugar sprinkles around it
+        g.strokeStyle = 'rgba(255,255,255,0.75)';
+        g.lineWidth = 2.5;
+        g.beginPath();
+        g.moveTo(14, 46);
+        g.lineTo(32, 23);
+        g.lineTo(50, 46);
+        g.stroke();
+        const sprinkle = ['#4fd6b8', '#ffd24a', '#8a6bff', '#ff4f93'];
+        for (let k = 0; k < 9; k++) {
+          const x = 6 + ((k * 23) % 52), y = 6 + ((k * 37) % 52);
+          g.fillStyle = sprinkle[k % 4];
+          g.save();
+          g.translate(x, y);
+          g.rotate(k * 1.9);
+          g.fillRect(-3, -1.2, 6, 2.4);
+          g.restore();
+        }
+      }
     });
   }
   checkerTexture() {
@@ -2251,6 +2285,8 @@ class World3D {
         if (t.K[k - 1] || t.K[k + 1] || t.K[k - t.nx] || t.K[k + t.nx]) continue;
         const gi = t.G[k];
         if (gi < 0) continue;
+        // nothing grows into the shell of a tunnel landmark (a giant clog is wider than the road)
+        if (gi < this.pinfo[0].tunnel.length && this.pinfo[0].tunnel[gi] === 1 && t.E[k] < 9) continue;
         const r0 = rnd(), r1 = rnd(), r2 = rnd(), r3 = rnd(), r4 = rnd(), r5 = rnd();
         const ti = this.terrainThemeAt(gi), th = this.themes[ti];
         if (r0 > (th.decorN === undefined ? 1 : th.decorN) * per) continue;
@@ -2901,6 +2937,7 @@ class World3D {
     const p = this.track.main, ids = tu.ids, look = tu.look;
     if (ids.length < 3) return;
     const R = tu.R, H = (i) => R(i) * 0.75 + 2.5;
+    if (TUNNEL_LOOKS[look]) return TUNNEL_LOOKS[look].call(this, p, ids, tu);
     if (look === 'wood') return this.snowShed(p, ids, R, H);
     const L = {
       ice: { inner: '#c4e6ff', outer: '#9fcdf2', thick: 2.2, lump: 2.4, mound: 4, wide: 9, cap: true },
@@ -3104,6 +3141,7 @@ class World3D {
     this.uGlow.value = g;
     for (const a of this.anims) a(time);
     if (this.padTex) this.padTex.offset.y = -time * 1.8;
+    if (this.candyTex) this.candyTex.offset.y = -time * 1.2;
     if (this.metalGlowTex) this.metalGlowTex.offset.y = -time * 0.9;
     if (race && this.gates) {
       race.items.gates.forEach((gt, i) => {

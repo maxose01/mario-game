@@ -682,6 +682,24 @@ function run(race, secs, fn) {
     }
     check('water jets and talking trees warn for at least 0.7 s first', shortest >= 0.7, shortest === Infinity ? 'none on any course yet' : `shortest warning ${shortest.toFixed(2)} s`);
   }
+  {
+    // a candy trail's pads give a share of a full pad's boost (zone power), a plain pad the whole of it
+    const peakBoost = (track, z) => {
+      const race = soloRace(track);
+      race.state = 'race';
+      const k = placeOn(race, (z.s0 + z.s1) / 2 - 3, (z.d0 + z.d1) / 2, 20);
+      let peak = 0;
+      run(race, 0.5, () => {
+        k.ctl.gas = true;
+        peak = Math.max(peak, k.boostT);
+      });
+      return peak;
+    };
+    const candy = getTrack('fablefair').main.zones.find((z) => z.kind === 'boost' && z.look === 'candy');
+    const plain = M.main.zones.find((z) => z.kind === 'boost');
+    const a = candy ? peakBoost('fablefair', candy) : 0, b = peakBoost('mount', plain);
+    check("a candy pad gives half of a full pad's boost", !!candy && Math.abs(a - CFG.padBoostTime * candy.power) < 0.15 && Math.abs(b - CFG.padBoostTime) < 0.15, `candy ${a.toFixed(2)} s (power ${candy ? candy.power : '-'}), plain ${b.toFixed(2)} s`);
+  }
   // a star shatters a snowball instead
   const st = tryHazard({ kind: 'roller', d: 0, range: 0.3 }, 0, true);
   st.k.starT = 5;

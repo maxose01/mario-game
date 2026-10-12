@@ -647,7 +647,12 @@ class Track {
       if (z.t1 !== undefined) s1 = this.segS(z.seg, z.t1);
       if (z.u1 !== undefined) s1 = z.u1 * w.path.length;
       const half = (z.w !== undefined ? z.w : 200) / 2;
-      const add = (a, b) => w.path.zones.push({ kind: z.kind, path: w.path, s0: a, s1: b, d0: (z.d || 0) - half, d1: (z.d || 0) + half, h: z.h || 0, flow: z.flow || 0 });
+      // look / power (a boost pad's candy swirl and the share of a full pad's boost it gives) only
+      // exist on the zones that name them
+      const extra = {};
+      if (z.look) extra.look = z.look;
+      if (z.power) extra.power = z.power;
+      const add = (a, b) => w.path.zones.push(Object.assign({ kind: z.kind, path: w.path, s0: a, s1: b, d0: (z.d || 0) - half, d1: (z.d || 0) + half, h: z.h || 0, flow: z.flow || 0 }, extra));
       if (w.path.closed) {
         // keep zones inside 0..L, splitting any that cross the start line
         const L = w.path.length;

@@ -5,10 +5,12 @@
 // racer gets a little engine hum, plus wind while gliding and the cargo plane's drone.
 
 const NOTE_INDEX = { C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, F: 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11 };
+// Note names are a letter, an optional # or b, and an octave: C5, F#4, Bb3. A "d" after the letter
+// (and accidental) lowers the note a quarter tone, for the Eastern scales: Ed5 is E half-flat.
 function noteFreq(n) {
-  const m = /^([A-G][#b]?)(-?\d)$/.exec(n);
+  const m = /^([A-G][#b]?)(d?)(-?\d)$/.exec(n);
   if (!m) return 0;
-  const midi = 12 * (parseInt(m[2], 10) + 1) + NOTE_INDEX[m[1]];
+  const midi = 12 * (parseInt(m[3], 10) + 1) + NOTE_INDEX[m[1]] - (m[2] ? 0.5 : 0);
   return 440 * Math.pow(2, (midi - 69) / 12);
 }
 function parseTrack(s) {
@@ -24,6 +26,13 @@ function parseTrack(s) {
 //                     arpLen (fraction of the step: < 1 for staccato)
 //   fill              drum pattern for the last bar of the loop
 //   crash             a crash cymbal on the first beat of every loop
+//   bar               steps per bar (default 8; 6 makes a waltz): the drum patterns, the fill and
+//                     the hand-over to a queued song all follow it
+//   leadType, bassType, arpType  an instrument voice (musicbox, pluck, celesta, oud, qanun, ney,
+//                     pad; see VOICES) instead of a plain oscillator; bassVol sets the bass's volume
+//   drone             notes ("G2 D3") held as a soft pad under every bar, at droneVol
+// More drum letters: b soft kick, p woodblock tick, D / e / a darbuka dum / tek / ka, z finger
+// cymbals, r tambourine jingle.
 const SONGS = {
   title: {
     bpm: 128,
@@ -110,6 +119,60 @@ const SONGS = {
     arpType: 'triangle',
     arpVol: 0.32,
   },
+  // Fable Fair, one song per lap. Lap 1, the Fairy-Tale Forest: a music-box waltz in E minor that
+  // brightens into G major for its second half, a plucked "oom" under tinkling "pah-pah" broken
+  // chords and a woodblock tick.
+  fable1: {
+    bpm: 138,
+    bar: 6,
+    lead: 'E5 . G5 . B5 . | E6 - D6 C6 B5 . | A5 . C6 . E6 . | D#6 - - B5 - . | E5 . G5 . B5 . | G6 - F#6 E6 D6 . | C6 B5 A5 G5 F#5 . | E5 - - . . . | B5 . D6 . G6 . | F#6 - E6 D6 B5 . | G5 . B5 . E6 . | E6 - D6 C6 A5 . | A5 . C6 . E6 . | D#6 . F#6 . B6 . | A6 - G6 F#6 D#6 . | E6 - - B5 - .',
+    bass: 'E2 - . . . . | E2 - . . . . | A2 - . . . . | B2 - . . . . | E2 - . . . . | E2 - . . . . | A2 - . B2 - . | E2 - . . . . | G2 - . . . . | D3 - . . . . | E2 - . . . . | C3 - . . . . | A2 - . . . . | B2 - . . . . | B2 - . . . . | E2 - . . . .',
+    arp: '. . B3 . G4 . | . . B3 . G4 . | . . C4 . E4 . | . . F#4 . A4 . | . . B3 . G4 . | . . B3 . G4 . | . . C4 . F#4 . | . . B3 . G4 . | . . D4 . B4 . | . . A3 . F#4 . | . . B3 . G4 . | . . E4 . G4 . | . . C4 . E4 . | . . F#4 . A4 . | . . D#4 . A4 . | . . B3 . G4 .',
+    drums: 'b.p.p.',
+    fill: 'b.p.pp',
+    leadType: 'musicbox',
+    leadVol: 0.72,
+    bassType: 'pluck',
+    bassVol: 0.72,
+    arpType: 'musicbox',
+    arpVol: 0.22,
+  },
+  // Lap 2, the Desert Mirage: the Puffball Circuit tune (same melody, same tempo) in maqam hijaz on
+  // G (the flat second and the flat sixth give the augmented seconds). A ney carries it over an oud,
+  // a qanun filling the gaps in the tune with broken chords, a drone on G and D and a darbuka
+  // playing the maqsum rhythm.
+  fable2: {
+    bpm: 150,
+    lead: 'G5 . Ab5 B5 . D6 . B5 | C6 . Ab5 . G5 . Eb5 . | F5 . Ab5 . C6 . Eb6 . | D6 - - . . . B5 . | C6 . B5 Ab5 . G5 . Eb5 | F5 . Eb5 . D5 . G5 . | Ab5 . B5 . C6 . D6 . | G5 - - - . . . .',
+    bass: 'G2 . D3 . G2 . D3 . | Ab2 . Eb3 . Ab2 . C3 . | F2 . C3 . F2 . Ab2 . | G2 . D3 . G2 . B2 . | C3 . G2 . C3 . Eb3 . | D3 . D2 . D3 . F#2 . | G2 . D3 . Eb3 . F#3 . | G2 . D3 . G2 . . .',
+    arp: '. D5 . . B4 . G4 . | . Eb5 . C5 . Ab4 . C5 | . C5 . Ab4 . F4 . Ab4 | . . . D5 B4 D5 . G4 | . G4 . . Eb5 . C5 . | . D5 . F#4 . D5 . F#4 | . D5 . G4 . B4 . D5 | . . . . D5 B4 G4 D4',
+    drums: 'De.eD.e.',
+    fill: 'DeDeeeDz',
+    drone: 'G2 D3',
+    droneVol: 0.1,
+    leadType: 'ney',
+    leadVol: 0.45,
+    bassType: 'oud',
+    bassVol: 0.45,
+    arpType: 'qanun',
+    arpVol: 0.12,
+    arpLen: 0.6,
+  },
+  // Lap 3, the Dream Skyway: a slow, floating tune in D with a lydian lift (the raised fourth, G#,
+  // over the E chord): a celesta over a warm pad and rippling music-box arpeggios.
+  fable3: {
+    bpm: 112,
+    lead: 'A5 . D6 . F#6 - - . | E6 . C#6 . A5 . B5 . | D6 . F#6 . B6 - A6 . | E6 - D6 . B5 . A5 . | F#6 . A6 . F#6 . D6 . | E6 . A5 . C#6 . E6 . | D6 . B5 . D6 . F#6 . | E6 - - - A5 - - . | D6 . F#6 . A6 - - . | G#6 . E6 . B5 . E6 . | F#6 . C#6 . A5 . C#6 . | D6 . G6 . B6 - A6 . | F#6 - A6 - D6 - - . | G#6 . B6 . E6 - - . | C#6 . E6 . A6 - G#6 - | E6 - - - . . . .',
+    bass: 'D3 - - - - - - - | A2 - - - - - - - | B2 - - - - - - - | G2 - - - - - - - | D3 - - - - - - - | A2 - - - - - - - | B2 - - - - - - - | A2 - - - - - - - | D3 - - - - - - - | E3 - - - - - - - | F#3 - - - - - - - | G2 - - - - - - - | D3 - - - - - - - | E3 - - - - - - - | A2 - - - - - - - | A2 - - - - - - -',
+    arp: 'D4 F#4 A4 F#4 D5 A4 F#4 A4 | A3 C#4 E4 C#4 A4 E4 C#4 E4 | B3 D4 F#4 D4 B4 F#4 D4 F#4 | G3 B3 D4 B3 G4 D4 B3 D4 | D4 F#4 A4 F#4 D5 A4 F#4 A4 | A3 C#4 E4 C#4 A4 E4 C#4 E4 | B3 D4 F#4 D4 B4 F#4 D4 F#4 | A3 C#4 E4 C#4 A4 E4 C#4 E4 | D4 F#4 A4 F#4 D5 A4 F#4 A4 | E4 G#4 B4 G#4 E5 B4 G#4 B4 | F#3 A3 C#4 A3 F#4 C#4 A3 C#4 | G3 B3 D4 B3 G4 D4 B3 D4 | D4 F#4 A4 F#4 D5 A4 F#4 A4 | E4 G#4 B4 G#4 E5 B4 G#4 B4 | A3 C#4 E4 C#4 A4 E4 C#4 E4 | A3 C#4 E4 C#4 A4 E4 C#4 E4',
+    drums: 'b.p.b.p.',
+    leadType: 'celesta',
+    leadVol: 0.55,
+    bassType: 'pad',
+    bassVol: 0.24,
+    arpType: 'musicbox',
+    arpVol: 0.15,
+  },
   results: {
     bpm: 120,
     lead: 'C5 . E5 . G5 . C6 . | B5 . G5 . D5 . G5 . | A5 . F5 . C5 . F5 . | G5 - - - C6 - - -',
@@ -130,6 +193,155 @@ for (const k in SONGS) {
   SONGS[k].bassSteps = parseTrack(SONGS[k].bass);
   if (SONGS[k].arp) SONGS[k].arpSteps = parseTrack(SONGS[k].arp);
 }
+
+// Instrument voices for the songs that ask for them (leadType, bassType, arpType): each plays one
+// note of frequency f for len seconds at volume vol from time `when` into dest (snd = Sound, for its
+// noise buffer). The plain oscillator voices of the older songs live in scheduleStep.
+// One decaying partial: an oscillator with a quick attack and an exponential fall.
+function partial(c, dest, type, freq, vol, when, atk, dur) {
+  const osc = c.createOscillator();
+  const g = c.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.exponentialRampToValueAtTime(Math.max(0.0002, vol), when + atk);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  osc.connect(g);
+  g.connect(dest);
+  osc.start(when);
+  osc.stop(when + dur + 0.03);
+}
+const VOICES = {
+  // a music box: a struck steel tine, a clear ring with a bright tick on top that dies at once
+  musicbox(c, dest, f, len, vol, when) {
+    const ring = U.clamp(len * 1.5, 0.5, 1.5);
+    partial(c, dest, 'sine', f, vol, when, 0.003, ring);
+    partial(c, dest, 'sine', f * 2.01, vol * 0.2, when, 0.002, ring * 0.35);
+    partial(c, dest, 'sine', f * 6.27, vol * 0.08, when, 0.001, 0.06);
+  },
+  // a harp-like pizzicato for the bass
+  pluck(c, dest, f, len, vol, when) {
+    partial(c, dest, 'triangle', f, vol, when, 0.004, U.clamp(len * 1.1, 0.25, 0.7));
+    partial(c, dest, 'sine', f * 2, vol * 0.25, when, 0.003, 0.2);
+  },
+  // a glassy celesta, bell-bright and soft
+  celesta(c, dest, f, len, vol, when) {
+    const ring = U.clamp(len * 1.6, 0.6, 1.8);
+    partial(c, dest, 'sine', f, vol, when, 0.004, ring);
+    partial(c, dest, 'sine', f * 2.76, vol * 0.1, when, 0.003, ring * 0.3);
+    partial(c, dest, 'sine', f * 4, vol * 0.16, when, 0.003, ring * 0.25);
+  },
+  // a lute: bright at the pick, mellowing as it rings; a held note is picked over and over (tremolo)
+  oud(c, dest, f, len, vol, when) {
+    const pick = (t, v, d) => {
+      const g = c.createGain(), flt = c.createBiquadFilter();
+      flt.type = 'lowpass';
+      flt.Q.value = 1.2;
+      flt.frequency.setValueAtTime(Math.min(6500, f * 8), t);
+      flt.frequency.exponentialRampToValueAtTime(Math.max(420, f * 2), t + d);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(v, t + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      flt.connect(g);
+      g.connect(dest);
+      for (const [type, mul, amp] of [['sawtooth', 1, 0.55], ['triangle', 2.004, 0.45]]) {
+        const o = c.createOscillator(), og = c.createGain();
+        o.type = type;
+        o.frequency.value = f * mul;
+        og.gain.value = amp;
+        o.connect(og);
+        og.connect(flt);
+        o.start(t);
+        o.stop(t + d + 0.03);
+      }
+    };
+    pick(when, vol, U.clamp(len, 0.22, 0.9));
+    for (let t = 0.13; t < len - 0.08; t += 0.13) pick(when + t, vol * 0.55, 0.2);
+  },
+  // a zither: a bright, quick pluck
+  qanun(c, dest, f, len, vol, when) {
+    partial(c, dest, 'triangle', f, vol, when, 0.002, U.clamp(len * 1.3, 0.2, 0.8));
+    partial(c, dest, 'sawtooth', f * 2, vol * 0.1, when, 0.002, 0.12);
+    partial(c, dest, 'sine', f * 3.01, vol * 0.18, when, 0.002, 0.25);
+  },
+  // an end-blown reed flute: a soft, breathy tone that scoops up into every note and wavers on the long ones
+  ney(c, dest, f, len, vol, when, snd) {
+    const dur = Math.max(0.12, len);
+    const o = c.createOscillator(), o2 = c.createOscillator(), g = c.createGain(), g2 = c.createGain();
+    o.type = 'sine';
+    o2.type = 'triangle';
+    o.frequency.setValueAtTime(f * 0.965, when);
+    o.frequency.exponentialRampToValueAtTime(f, when + 0.05);
+    o2.frequency.setValueAtTime(f * 1.93, when);
+    o2.frequency.exponentialRampToValueAtTime(f * 2, when + 0.05);
+    if (dur > 0.3) {
+      const lfo = c.createOscillator(), d1 = c.createGain(), d2 = c.createGain();
+      lfo.frequency.value = 5.3;
+      d1.gain.setValueAtTime(0, when);
+      d1.gain.linearRampToValueAtTime(f * 0.009, when + Math.min(0.35, dur * 0.6));
+      d2.gain.setValueAtTime(0, when);
+      d2.gain.linearRampToValueAtTime(f * 0.018, when + Math.min(0.35, dur * 0.6));
+      lfo.connect(d1);
+      lfo.connect(d2);
+      d1.connect(o.frequency);
+      d2.connect(o2.frequency);
+      lfo.start(when);
+      lfo.stop(when + dur + 0.05);
+    }
+    g2.gain.value = 0.16;
+    o.connect(g);
+    o2.connect(g2);
+    g2.connect(g);
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.exponentialRampToValueAtTime(vol, when + 0.05);
+    g.gain.setValueAtTime(vol * 0.9, when + Math.max(0.06, dur - 0.1));
+    g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    g.connect(dest);
+    o.start(when);
+    o2.start(when);
+    o.stop(when + dur + 0.05);
+    o2.stop(when + dur + 0.05);
+    // the breath: band-passed noise riding on the note
+    if (snd && snd.noiseBuf) {
+      const src = c.createBufferSource(), bp = c.createBiquadFilter(), ng = c.createGain();
+      src.buffer = snd.noiseBuf;
+      src.loop = true;
+      bp.type = 'bandpass';
+      bp.frequency.value = f * 2.2;
+      bp.Q.value = 5;
+      ng.gain.setValueAtTime(0.0001, when);
+      ng.gain.exponentialRampToValueAtTime(vol * 0.5, when + 0.04);
+      ng.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+      src.connect(bp);
+      bp.connect(ng);
+      ng.connect(dest);
+      src.start(when, Math.random() * 0.5);
+      src.stop(when + dur + 0.05);
+    }
+  },
+  // a slow, warm pad: two detuned saws through a soft low-pass, fading in and out over len
+  pad(c, dest, f, len, vol, when) {
+    const flt = c.createBiquadFilter(), g = c.createGain();
+    flt.type = 'lowpass';
+    flt.frequency.value = Math.min(1400, f * 4);
+    flt.Q.value = 0.7;
+    const atk = Math.min(0.5, len * 0.35), rel = Math.min(0.6, len * 0.4);
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.exponentialRampToValueAtTime(vol, when + atk);
+    g.gain.setValueAtTime(vol, when + Math.max(atk, len - rel));
+    g.gain.exponentialRampToValueAtTime(0.0001, when + len);
+    for (const det of [-0.004, 0.004]) {
+      const o = c.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.value = f * (1 + det);
+      o.connect(flt);
+      o.start(when);
+      o.stop(when + len + 0.05);
+    }
+    flt.connect(g);
+    g.connect(dest);
+  },
+};
 
 const Sound = {
   ctx: null,
@@ -328,7 +540,7 @@ const Sound = {
     // a throttled timer (hidden tab) must not fire a burst of late notes when it wakes up
     if (this.nextTime < c.currentTime - 0.2) this.nextTime = c.currentTime + 0.02;
     while (this.nextTime < c.currentTime + 0.12) {
-      if (this.queued && this.step % 8 === 0) {
+      if (this.queued && this.step % (this.song.bar || 8) === 0) {
         // on the bar line: hand over to the queued song without missing a beat
         this.song = SONGS[this.queued] || this.song;
         this.songName = this.queued;
@@ -394,23 +606,33 @@ const Sound = {
       osc.start(when);
       osc.stop(when + 0.25);
     };
+    const BAR = s.bar || 8;
     if (ln && ln !== '-' && ln !== '.') {
       const f = noteFreq(ln);
       const len = dur * this.holdLength(L, li) * 0.95;
       const vol = s.leadVol !== undefined ? s.leadVol : 0.5;
-      voice(f, len, s.leadType || 'triangle', vol, t, s.leadVib);
+      if (VOICES[s.leadType]) VOICES[s.leadType](c, dest, f, len, vol, t, this);
+      else voice(f, len, s.leadType || 'triangle', vol, t, s.leadVib);
       if (s.lead2) voice(f * 2, len * 0.6, 'sine', 0.5 * s.lead2, t); // marimba-ish shimmer
     }
     if (bn && bn !== '-' && bn !== '.') {
-      voice(noteFreq(bn), dur * this.holdLength(B, bi) * 0.9, 'triangle', 0.55, t);
+      const len = dur * this.holdLength(B, bi) * 0.9, vol = s.bassVol !== undefined ? s.bassVol : 0.55;
+      if (VOICES[s.bassType]) VOICES[s.bassType](c, dest, noteFreq(bn), len, vol, t, this);
+      else voice(noteFreq(bn), len, 'triangle', vol, t);
     }
     if (A) {
       const ai = step % A.length, an = A[ai];
       if (an && an !== '-' && an !== '.') {
         const vol = s.arpVol !== undefined ? s.arpVol : 0.25;
+        const len = dur * this.holdLength(A, ai) * (s.arpLen || 0.9);
         if (s.arpType === 'drop') droplet(noteFreq(an), vol, t);
-        else voice(noteFreq(an), dur * this.holdLength(A, ai) * (s.arpLen || 0.9), s.arpType || 'triangle', vol, t);
+        else if (VOICES[s.arpType]) VOICES[s.arpType](c, dest, noteFreq(an), len, vol, t, this);
+        else voice(noteFreq(an), len, s.arpType || 'triangle', vol, t);
       }
+    }
+    // a drone: a soft pad on the bar line, held through the bar
+    if (s.drone && step % BAR === 0) {
+      for (const n of s.drone.split(' ')) VOICES.pad(c, dest, noteFreq(n), dur * BAR * 1.04, s.droneVol !== undefined ? s.droneVol : 0.1, t);
     }
     const drum = (freq, slide, len, vol) => {
       const osc = c.createOscillator();
@@ -425,25 +647,27 @@ const Sound = {
       osc.start(t);
       osc.stop(t + len + 0.02);
     };
-    const hiss = (len, freq, vol) => {
+    const hiss = (len, freq, vol, off = 0, type = 'highpass', q = 1) => {
       const src = c.createBufferSource();
       src.buffer = this.noiseBuf;
       src.loop = len > 0.4;
       const f = c.createBiquadFilter();
-      f.type = 'highpass';
+      f.type = type;
       f.frequency.value = freq;
+      f.Q.value = q;
       const g = c.createGain();
-      g.gain.setValueAtTime(vol, t);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+      g.gain.setValueAtTime(vol, t + off);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + off + len);
       src.connect(f);
       f.connect(g);
       g.connect(dest);
-      src.start(t, Math.random() * 0.5);
-      src.stop(t + len + 0.02);
+      src.start(t + off, Math.random() * 0.5);
+      src.stop(t + off + len + 0.02);
     };
+    const band = (len, freq, q, vol) => hiss(len, freq, vol, 0, 'bandpass', q);
     // drums: the fill pattern takes the last bar of the loop, a crash marks the top of it
-    const bars = Math.max(1, Math.floor(L.length / 8));
-    const pat = s.fill && Math.floor(li / 8) === bars - 1 ? s.fill : s.drums;
+    const bars = Math.max(1, Math.floor(L.length / BAR));
+    const pat = s.fill && Math.floor(li / BAR) === bars - 1 ? s.fill : s.drums;
     const d = pat[step % pat.length];
     if (s.crash && li === 0) hiss(1.3, 3200, 0.3);
     if (d === 'k') drum(150, 45, 0.16, 0.9);
@@ -452,6 +676,21 @@ const Sound = {
     else if (d === 'o') hiss(0.16, 5000, 0.2);
     else if (d === 't') drum(170, 95, 0.2, 0.75);
     else if (d === 'T') drum(250, 150, 0.16, 0.7);
+    else if (d === 'b') drum(115, 52, 0.2, 0.5);
+    else if (d === 'p') drum(1900, 1500, 0.035, 0.16);
+    else if (d === 'D') {
+      drum(135, 62, 0.22, 0.85);
+      drum(270, 130, 0.07, 0.25);
+    } else if (d === 'e') {
+      band(0.06, 3300, 4, 0.34);
+      drum(430, 330, 0.05, 0.22);
+    } else if (d === 'a') band(0.035, 2400, 3, 0.17);
+    else if (d === 'z') {
+      drum(5100, 5000, 0.22, 0.04);
+      drum(6300, 6200, 0.18, 0.035);
+    } else if (d === 'r') {
+      for (let j = 0; j < 3; j++) hiss(0.025, 7500, 0.12, j * 0.016);
+    }
     if (this.bongos) {
       const pat = 'h.lh.l.h';
       const b = pat[step % pat.length];
