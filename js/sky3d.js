@@ -22,6 +22,11 @@ const SKY_MOODS = {
   snow: { sun: [-0.42, 0.76, -0.45], shade: '#6d8ff0', fill: '#d3e4ff', glow: '#fff1cf', backdrop: 'icepeaks' },
   lava: { sun: [-0.52, 0.6, -0.5], shade: '#7a3496', fill: '#ff9f80', glow: '#ffb27a', under: '#ff5a1f', backdrop: 'crags', cloud: '#a77aa6', smoke: '#5e4262' },
   alpine: { sun: [-0.4, 0.72, -0.48], shade: '#5d84e0', fill: '#d4e5ff', glow: '#fff0c4', backdrop: 'range' },
+  // Fable Fair's laps (the sun sits where lap 1's does, whichever lap you are in): trees: the
+  // colours of the little treetops on the distant islands; sunI, hemiI, fillI: light strengths
+  fairy: { sun: [-0.45, 0.8, -0.35], shade: '#4b3a9c', fill: '#9fb0ff', glow: '#ffae94', backdrop: 'islands', trees: ['#2f7a4c', '#3f9a5c', '#256a40', '#c78bff'], sunI: 1.5, hemiI: 0.95 },
+  mirage: { sun: [-0.45, 0.8, -0.35], shade: '#b8708a', fill: '#ffe1b8', glow: '#ffe6a8', backdrop: 'islands', trees: ['#9fc65a', '#c9b45a', '#7fb04a', '#e8c070'], sunI: 2.1, hemiI: 0.8 },
+  dream: { sun: [-0.45, 0.8, -0.35], shade: '#2c2cc4', fill: '#8a8cff', glow: '#b6b8ff', backdrop: 'islands', trees: ['#b9a8ff', '#9a8aff', '#e8d8ff', '#ffe08a'], sunI: 1.15, hemiI: 1.05, cloud: '#c9c0ff' },
 };
 
 const SKY_VERT = `
@@ -83,10 +88,91 @@ class Sky3D {
     this.buildSky();
     this.buildClouds();
     this.buildBackdrop();
+    if (world.multi) this.buildLapSets();
   }
 
   keep(o) {
     return this.world.keep(o);
+  }
+
+  // ---------- one look per lap ----------
+  // A course whose laps have themes of their own keeps one set of sky colours, light, fog, clouds
+  // and distant backdrop per lap. The first lap's is the one built above; the others are built
+  // here (the builders read this.theme / this.mood, so they are pointed at each lap in turn), and
+  // applyLap(a, b, w) then dresses the scene for lap a blending into lap b before each view is drawn.
+  buildLapSets() {
+    const world = this.world, C = (hex) => new THREE.Color(hex);
+    const base = { theme: this.theme, mood: this.mood, hazeCol: this.hazeCol, airCol: this.airCol, shadeCol: this.shadeCol, _amb: this._amb, _sun: this._sun };
+    const cache = {};
+    this.sets = world.themes.map((th, i) => {
+      const key = world.themeKeys[i];
+      if (cache[key]) return cache[key];
+      const mood = SKY_MOODS[key] || SKY_MOODS.meadow;
+      const set = (cache[key] = {
+        key, th, mood,
+        top: C(th.sky[0]), mid: C(th.sky[1]), low: C(th.sky[2]),
+        haze: C(th.sky[2]).lerp(C(th.fog), 0.5), glow: C(mood.glow), under: C(mood.under || '#000000'), sun: C(th.sun),
+        streak: C(mood.cloud || th.cloud || '#ffffff').lerp(C(th.sky[1]), 0.15),
+        fog: C(th.fog), fogNear: th.fogNear || 90, fogFar: th.fogFar || 520,
+        hemiSky: C(th.hemiSky), hemiGround: C(th.hemiGround), sunLight: C(th.sunLight), fill: C(mood.fill), shade: C(mood.shade),
+        sunI: mood.sunI || 1.9, hemiI: mood.hemiI || 0.8, fillI: mood.fillI || 0.3,
+        objs: [],
+      });
+      if (th === base.theme) {
+        // the look built above: its puffy clouds and its backdrop
+        set.objs = this.baseObjs.slice();
+      } else {
+        this.theme = th;
+        this.mood = mood;
+        this.hazeCol = set.haze.clone();
+        this.airCol = C(th.sky[1]).lerp(C(th.fog), 0.35);
+        this.shadeCol = C(mood.shade);
+        this._amb = this._sun = null;
+        const before = this.far.children.slice();
+        this.buildClouds();
+        this.buildBackdrop();
+        set.objs = this.far.children.filter((o) => !before.includes(o));
+      }
+      return set;
+    });
+    Object.assign(this, base);
+    for (const set of this.sets) for (const o of set.objs) o.visible = set === this.sets[0];
+    this.lap = { a: -1, b: -1, w: -1 };
+  }
+
+  // Dress the scene for lap a blending into lap b (w 0..1).
+  applyLap(a, b, w) {
+    const A = this.sets[a], B = this.sets[b];
+    const mix = (out, key) => out.copy(A[key]).lerp(B[key], w);
+    // (the clay shade is one uniform that applyShade() resets every frame, so it is set every time)
+    mix(Clay3D.uniforms.uShade.value, 'shade').multiplyScalar(0.4);
+    const L = this.lap;
+    if (L.a === a && L.b === b && Math.abs(L.w - w) < 0.002) return;
+    L.a = a;
+    L.b = b;
+    L.w = w;
+    const u = this.skyMat.uniforms, lights = this.lights, fog = this.scene.fog;
+    mix(u.uTop.value, 'top');
+    mix(u.uMid.value, 'mid');
+    mix(u.uLow.value, 'low');
+    mix(u.uHaze.value, 'haze');
+    mix(u.uGlow.value, 'glow');
+    mix(u.uUnder.value, 'under');
+    mix(this.streakMat.color, 'streak');
+    mix(this.sunSprite.material.color, 'sun');
+    mix(lights.hemi.color, 'hemiSky');
+    mix(lights.hemi.groundColor, 'hemiGround');
+    mix(lights.sun.color, 'sunLight');
+    mix(lights.fill.color, 'fill');
+    lights.hemi.intensity = U.lerp(A.hemiI, B.hemiI, w);
+    lights.sun.intensity = U.lerp(A.sunI, B.sunI, w);
+    lights.fill.intensity = U.lerp(A.fillI, B.fillI, w);
+    mix(fog.color, 'fog');
+    fog.near = U.lerp(A.fogNear, B.fogNear, w);
+    fog.far = U.lerp(A.fogFar, B.fogFar, w);
+    // the distant clouds and backdrop of whichever lap is nearer
+    const shown = this.sets[w < 0.5 ? a : b];
+    for (const set of this.sets) for (const o of set.objs) o.visible = set === shown;
   }
 
   // ---------- lights ----------
@@ -191,20 +277,23 @@ class Sky3D {
     sky.renderOrder = -10;
     sky.frustumCulled = false;
     this.sky = sky;
+    this.skyMat = mat;
     this.scene.add(sky);
     // sun (or moon) disc with a soft glow
     const sc = Clay.makeCanvas(128, 128);
     const sg = sc.getContext('2d');
+    // (laps with their own themes paint the sun white and tint the sprite per lap instead)
+    const sunPaint = this.world.multi ? '#ffffff' : th.sun;
     const grd = sg.createRadialGradient(64, 64, 8, 64, 64, 64);
-    grd.addColorStop(0, th.sun);
-    grd.addColorStop(0.3, th.sun);
-    grd.addColorStop(0.36, U.rgba(th.sun, 0.55));
-    grd.addColorStop(1, U.rgba(th.sun, 0));
+    grd.addColorStop(0, sunPaint);
+    grd.addColorStop(0.3, sunPaint);
+    grd.addColorStop(0.36, U.rgba(sunPaint, 0.55));
+    grd.addColorStop(1, U.rgba(sunPaint, 0));
     sg.fillStyle = grd;
     sg.fillRect(0, 0, 128, 128);
     const stex = this.keep(new THREE.CanvasTexture(sc));
     stex.colorSpace = THREE.SRGBColorSpace;
-    const sun = new THREE.Sprite(this.keep(new THREE.SpriteMaterial({ map: stex, fog: false, depthWrite: false, transparent: true })));
+    const sun = new THREE.Sprite(this.keep(new THREE.SpriteMaterial({ map: stex, fog: false, depthWrite: false, transparent: true, color: this.world.multi ? th.sun : 0xffffff })));
     sun.scale.set(130, 130, 1);
     sun.renderOrder = -9;
     sun.position.copy(this.sunDir).multiplyScalar(560);
@@ -226,10 +315,8 @@ class Sky3D {
       g.translate(Math.cos(a) * Math.cos(el) * r, Math.sin(el) * r, Math.sin(a) * Math.cos(el) * r);
       quads.push(g);
     }
-    const streaks = new THREE.Mesh(
-      this.keep(GK.merge(quads)),
-      this.keep(new THREE.MeshBasicMaterial({ map: tex, color: tint, transparent: true, opacity: mood.under ? 0.5 : 0.75, depthWrite: false, fog: false, side: THREE.DoubleSide })),
-    );
+    this.streakMat = this.keep(new THREE.MeshBasicMaterial({ map: tex, color: tint, transparent: true, opacity: mood.under ? 0.5 : 0.75, depthWrite: false, fog: false, side: THREE.DoubleSide }));
+    const streaks = new THREE.Mesh(this.keep(GK.merge(quads)), this.streakMat);
     streaks.renderOrder = -8;
     streaks.frustumCulled = false;
     sky.add(streaks);
@@ -293,8 +380,10 @@ class Sky3D {
   // higher up.
   buildClouds() {
     const th = this.theme, mood = this.mood;
-    this.far = new THREE.Group(); // follows the camera across the map at world height
-    this.scene.add(this.far);
+    if (!this.far) {
+      this.far = new THREE.Group(); // follows the camera across the map at world height
+      this.scene.add(this.far);
+    }
     const cloudCol = mood.cloud || th.cloud || '#ffffff';
     const lowCol = mood.smoke || th.cloudShade || cloudCol;
     const glow = new THREE.Color(th.sky[1]).lerp(new THREE.Color(cloudCol), 0.4);
@@ -318,6 +407,7 @@ class Sky3D {
       this.far.add(m);
       this.layers.push({ obj: m, speed });
     }
+    if (!this.baseObjs) this.baseObjs = this.far.children.slice(); // (the first look's clouds, then its backdrop)
   }
 
   // n clusters of lumpy puffs in a ring (radius r0..r1, world height yr[0]..yr[1]).
@@ -357,6 +447,7 @@ class Sky3D {
     m.frustumCulled = false;
     this.far.add(m);
     this.backdrop = m;
+    if (this.baseObjs && this.baseObjs.length === 2) this.baseObjs.push(m);
   }
 
   // Bake light, the clay rim and haze into a backdrop piece's vertex colours. The camera is at
@@ -566,7 +657,7 @@ class Sky3D {
     const th = this.theme;
     const rnd = U.rng(this.def.id.length * 13 + 1);
     const y0 = this.floorY;
-    const trees = ['#4fae55', '#62c060', '#7fcf6a', '#ff9fbf'];
+    const trees = this.mood.trees || ['#4fae55', '#62c060', '#7fcf6a', '#ff9fbf'];
     for (let i = 0; i < 15; i++) {
       const a = (i / 15) * TAU + rnd() * 0.3;
       const r = 400 + rnd() * 170, s = 13 + rnd() * 24;

@@ -24,6 +24,7 @@
 
 const CHUNK = 150; // scenery cell size in units
 const TERRAIN_TILE = 40; // terrain tile size in grid cells
+const LAP_BLEND = 34; // units either side of a lap line over which two laps' land colours blend
 
 // Invented clay sponsors for banners and boards.
 const BRANDS = [
@@ -39,6 +40,19 @@ const BRANDS = [
 
 // Shoulder colours per road style (null = the theme's).
 const SHOULDER_COL = { wood: 'dirt', rainbow: '#fff3c4', metal: '#46506a', water: '#a9bccd', ice: '#e3f1ff', stone: '#b8b0c4', snow: '#fbfdff' };
+// Hooks that a course's scenery file (js/scenery/*.js) fills in to bring its own looks:
+//   ROAD_TEXTURES[style](g, rnd, smear)  paints a 128 x 256 road texture (canvas context g)
+//   CURB_STYLES[style] = true            road styles that get striped curbs along the main road
+//   FLUSH_STYLES[style] = true           road styles whose shoulder starts at the road's edge, with no gap
+//   THEME_WALLS[themeKey] = lookName     the wall look a theme gives roads that name none
+//   DECOR_PIECES[kind](rnd, seed, th)    a scenery piece for a theme's decor list (returns a geometry)
+//   LAMPS[themeKey](world)               {geo, glow, y, size, every}: the lamp post of a theme
+const ROAD_TEXTURES = {};
+const CURB_STYLES = { road: true };
+const FLUSH_STYLES = {}; // road styles whose shoulder starts right at the road's edge (no gap between them)
+const THEME_WALLS = { meadow: 'hedge', snow: 'snow', lava: 'castle', alpine: 'snow' };
+const DECOR_PIECES = {};
+const LAMPS = {};
 
 // Wall looks: profile = [outward offset from the road edge, height] around the cross-section.
 const WALL_LOOKS = {
@@ -240,6 +254,11 @@ class World3D {
     this.track = track;
     this.def = track.def;
     this.theme = THEMES[this.def.theme];
+    // a course may give each of its sections (laps) a theme of its own: the land, scenery, sky,
+    // fog and light then change from lap to lap (themes[i] is lap i + 1's; multi = any differ)
+    this.themeKeys = track.sections.length ? track.sections.map((sec) => sec.theme || this.def.theme) : [this.def.theme];
+    this.themes = this.themeKeys.map((k) => THEMES[k] || this.theme);
+    this.multi = this.themes.some((t) => t !== this.theme);
     this.scene = new THREE.Scene();
     this.anims = [];
     this.disposables = [];
@@ -258,7 +277,7 @@ class World3D {
     this.tubeMat = this.keep(Clay3D.material({ vertexColors: true, wobble: 0.03, freq: 0.9 }));
     this.sheetMat = this.keep(Clay3D.material({ vertexColors: true, wobble: 0, side: THREE.DoubleSide }));
     this.neonMat = this.keep(new THREE.MeshBasicMaterial({ color: '#8ff6ff', fog: true }));
-    this.scene.fog = new THREE.Fog(th.fog, 90, 520);
+    this.scene.fog = new THREE.Fog(th.fog, th.fogNear || 90, th.fogFar || 520);
     this.prepare();
     this.buildTerrain();
     // lights, sky dome, sun, clouds and distant scenery (js/sky3d.js)
@@ -295,6 +314,12 @@ class World3D {
   // Keep the sky centred on whichever camera is drawing.
   follow(camera) {
     this.sky3d.follow(camera);
+  }
+
+  // Dress the scene for the lap a view is in, blending lap a into lap b (w 0..1): sky, fog, light
+  // and the distant backdrop (nothing to do on a course whose laps share one theme).
+  setLapTheme(a, b, w) {
+    if (this.multi) this.sky3d.applyLap(a, b, w);
   }
 
   dispose() {
@@ -389,9 +414,38 @@ class World3D {
     return m;
   }
 
+  // ---------- the themes of the laps ----------
+  // Index into this.themes of every road sample (all 0 unless the laps have themes of their own).
+  laneThemes() {
+    const T = this.track;
+    return T.paths.map((p) => {
+      const a = new Uint8Array(p.n);
+      if (this.multi) for (let i = 0; i < p.n; i++) a[i] = U.clamp(T.sectionAt(T.mainS(p, p.s[i])) - 1, 0, this.themes.length - 1);
+      return a;
+    });
+  }
+  // The theme of road sample i on path p.
+  themeAt(p, i) {
+    return this.multi ? this.themes[this.themeIdx[p.index][i]] : this.theme;
+  }
+  // How the themes blend along the main road: each lap line mixes the two laps' colours over the
+  // LAP_BLEND units either side of it. Returns {a, b, w} (theme indices and the weight of b) for a
+  // position s along the main road.
+  themeMix(s) {
+    const T = this.track, n = this.themes.length;
+    let k = Math.max(0, T.sectionAt(s) - 1);
+    if (k >= n) k = n - 1;
+    for (let j = 0; j < n - 1; j++) {
+      const line = T.sections[j + 1].s;
+      if (Math.abs(s - line) < LAP_BLEND) return { a: j, b: j + 1, w: sstep(line - LAP_BLEND, line + LAP_BLEND, s) };
+    }
+    return { a: k, b: k, w: 0 };
+  }
+
   // ---------- per-path render info ----------
   prepare() {
     const T = this.track;
+    this.themeIdx = this.laneThemes();
     this.pinfo = T.paths.map((p) => {
       const gap = new Uint8Array(p.n), corner = new Uint8Array(p.n), lift = new Float32Array(p.n), tunnel = new Uint8Array(p.n);
       for (const z of p.zones) {
@@ -468,6 +522,20 @@ class World3D {
     this.voidY = valley ? valleyY : VOID;
     this.valleyY = valleyY;
     const R = { SX, SZ, SP, SI, off, ng, VOID, valleyY, span: Math.max(30, maxY - valleyY), drops: null };
+    // the laps' themes along the road, for the land's colours and shape (tA, tB: theme indices, tW: weight of tB)
+    if (this.multi) {
+      R.tA = new Uint8Array(ng);
+      R.tB = new Uint8Array(ng);
+      R.tW = new Float32Array(ng);
+      for (const p of paths) {
+        for (let i = 0; i < p.n; i++) {
+          const m = this.themeMix(T.mainS(p, p.s[i])), g = off[p.index] + i;
+          R.tA[g] = m.a;
+          R.tB[g] = m.b;
+          R.tW[g] = m.w;
+        }
+      }
+    }
     // on a mountain: the drop edges (and crevasses under gaps) with their heights
     if (valley) {
       const dx = [], dz = [], dy = [];
@@ -519,6 +587,7 @@ class World3D {
     R.base = this.baseField(R, top.x0, top.z0, (top.nx - 1) * top.cell, (top.nz - 1) * top.cell, valley ? 24 : 12, valley ? 170 : 45);
     this.terrainField(fine, R);
     this.terrain = fine;
+    this.terrainR = R;
     if (outer) this.terrainField(outer, R);
     this.terrainOuter = outer;
     // lakes and ponds sit in bowls; a gorge {seg, t, d, r, y | depth} is a dry hollow with a flat
@@ -702,13 +771,25 @@ class World3D {
     };
     // 4. heights
     const H = new Float32Array(N), K = new Uint8Array(N), E = new Float32Array(N);
+    const G = new Int32Array(N).fill(-1); // the nearest road sample of every vertex (its lap's theme)
     const inLoop = !valley && T.main.closed ? polyMask(loopPoly(T.main), nx, nz, x0, z0, cell) : null;
     const hillAmp = th === THEMES.snow ? 16 : lava ? 3 : 7;
+    // with a theme per lap the land rolls higher or lower, and reaches further, from lap to lap
+    const lapThemes = (gi) => [this.themes[R.tA[gi]], this.themes[R.tB[gi]], R.tW[gi]];
+    const lapHill = (gi) => {
+      const [a, b, w] = lapThemes(gi);
+      return U.lerp(a.hill !== undefined ? a.hill : 7, b.hill !== undefined ? b.hill : 7, w);
+    };
+    const lapRim = (gi) => {
+      const [a, b, w] = lapThemes(gi);
+      return U.lerp(a.rim || 30, b.rim || 30, w);
+    };
     for (let j = 0; j < nz; j++) {
       const z = z0 + j * cell;
       for (let i = 0; i < nx; i++) {
         const x = x0 + i * cell, k = j * nx + i;
         const gi = FP[k] >= 0 ? FP[k] : SEED[k];
+        G[k] = gi;
         if (gi < 0) {
           H[k] = valley ? valleyY : VOID;
           K[k] = valley ? 0 : 1;
@@ -769,20 +850,20 @@ class World3D {
           continue;
         }
         // floating island: the void beside drop edges and beyond the rim
-        const rim = (inLoop && inLoop[k] ? 999 : 30) + fbm2(x * 0.02 + 3, z * 0.02) * 26;
+        const rim = (inLoop && inLoop[k] ? 999 : this.multi ? lapRim(gi) : 30) + fbm2(x * 0.02 + 3, z * 0.02) * 26;
         if ((flag === 0 && edge < 26 + fbm2(x * 0.05, z * 0.05) * 10) || edge > rim) {
           H[k] = VOID;
           K[k] = 1;
           continue;
         }
         if (base !== base) base = sideY;
-        const hill = fbm2(x * 0.018, z * 0.018) * hillAmp * U.clamp((edge - 3) / 40, 0, 1);
+        const hill = fbm2(x * 0.018, z * 0.018) * (this.multi ? lapHill(gi) : hillAmp) * U.clamp((edge - 3) / 40, 0, 1);
         const lump = (noise3(x * 0.2, 1.3, z * 0.2) - 0.5) * 0.8;
         H[k] = sideY - 0.45 + (base - sideY) * sstep(2, 30, edge) + Math.max(0, hill) + lump * U.clamp(edge / 6, 0, 1);
         K[k] = 0;
       }
     }
-    Object.assign(g, { H, K, E, valleyY });
+    Object.assign(g, { H, K, E, G, valleyY });
   }
 
   // Normals, colours and tiled meshes for a terrain grid (the outer grid skips its hole).
@@ -825,6 +906,8 @@ class World3D {
     // colours
     const COL = new Float32Array(N * 3);
     const cGrass = new THREE.Color(th.grass), cGrass2 = new THREE.Color(th.grass2), cDirt = new THREE.Color(th.dirt), cRock = new THREE.Color(th.rock);
+    // with a theme per lap each vertex takes its nearest road's palette (blended near a lap line)
+    const pals = this.multi ? this.themes.map((t) => ({ grass: new THREE.Color(t.grass), grass2: new THREE.Color(t.grass2), dirt: new THREE.Color(t.dirt), rock: new THREE.Color(t.rock) })) : null;
     const cValley = new THREE.Color(th.valley || th.grass2), cForest = new THREE.Color(th.forest2 || th.grass2), cWhite = new THREE.Color('#ffffff');
     const c = new THREE.Color();
     for (let j = 0; j < nz; j++) {
@@ -833,6 +916,13 @@ class World3D {
         const x = x0 + i * cell, z = z0 + j * cell;
         const n = noise3(x * 0.07, 3, z * 0.07);
         const steep = 1 - NY[k];
+        if (pals) {
+          const gi = g.G[k], a = gi >= 0 ? R.tA[gi] : 0, b = gi >= 0 ? R.tB[gi] : 0, w = gi >= 0 ? R.tW[gi] : 0;
+          cGrass.copy(pals[a].grass).lerp(pals[b].grass, w);
+          cGrass2.copy(pals[a].grass2).lerp(pals[b].grass2, w);
+          cDirt.copy(pals[a].dirt).lerp(pals[b].dirt, w);
+          cRock.copy(pals[a].rock).lerp(pals[b].rock, w);
+        }
         if (K[k] === 1) c.copy(cRock).multiplyScalar(lava ? 0.55 : 0.82);
         else if (K[k] === 2) c.copy(valley ? cRock : cDirt).multiplyScalar(0.8);
         else if (valley) {
@@ -1101,7 +1191,9 @@ class World3D {
       }
     };
     let t;
-    if (style === 'rainbow') {
+    if (ROAD_TEXTURES[style]) {
+      t = this.canvasTex(128, 256, (g) => ROAD_TEXTURES[style].call(this, g, rnd, smear));
+    } else if (style === 'rainbow') {
       t = this.canvasTex(128, 256, (g) => {
         const cols = ['#ff6f91', '#ffb347', '#ffe066', '#7ddc6f', '#58b4ff', '#b48cff'];
         cols.forEach((col, i) => {
@@ -1407,16 +1499,17 @@ class World3D {
     const shoulderMat = this.keep(Clay3D.material({ vertexColors: true, wobble: 0, rim: 0.3, bump: false }));
     for (const p of T.paths) {
       const main = !p.branch;
-      for (const run of this.runs(p, (i) => p.style[i])) {
-        const style = run.key, ids = run.ids;
+      for (const run of this.runs(p, (i) => p.style[i] + (this.multi ? '@' + this.themeIdx[p.index][i] : ''))) {
+        const [style, ti] = run.key.split('@'), ids = run.ids;
+        const rth = this.multi ? this.themes[+ti] : th; // this stretch's theme
         const vScale = style === 'rainbow' ? 6 : 12;
         this.put(this.ribbon(p, ids, (i) => -p.hw[i], (i) => p.hw[i], main ? 0.07 : 0.05, { across: 4, uAcross: true, crown: style === 'water' ? 0 : 0.04, vScale }), this.roadMat(style), { cast: false, far: true, name: 'road' });
         // shoulders
-        let shCol = SHOULDER_COL[style] || th.shoulder;
-        if (shCol === 'dirt') shCol = th.dirt;
+        let shCol = SHOULDER_COL[style] || rth.shoulder;
+        if (shCol === 'dirt') shCol = rth.dirt;
         if (style === 'stone' && this.def.theme === 'lava') shCol = th.shoulder;
         for (const side of [-1, 1]) {
-          const inner = (i) => side * (p.hw[i] + (main ? 0.8 : 0)), outer = (i) => side * (p.hw[i] + p.sh[i]);
+          const inner = (i) => side * (p.hw[i] + (main && !FLUSH_STYLES[style] ? 0.8 : 0)), outer = (i) => side * (p.hw[i] + p.sh[i]);
           const g = this.ribbon(p, ids, side < 0 ? outer : inner, side < 0 ? inner : outer, main ? 0.03 : 0.015, { across: 2, color: shCol, vScale: 8 });
           this.put(g, shoulderMat, { cast: false, far: true, name: 'shoulder' });
         }
@@ -1424,10 +1517,13 @@ class World3D {
       }
       // curbs on the main road, glowing rails wherever the road is anti-gravity
       const info = this.pinfo[p.index];
-      const edge = (i) => (p.ag[i] ? 'ag' : main && (p.style[i] === 'road' || ((p.style[i] === 'snow' || p.style[i] === 'stone') && info.corner[i])) ? 'curb' : '');
+      const edge = (i) => (p.ag[i] ? 'ag' : main && (CURB_STYLES[p.style[i]] || ((p.style[i] === 'snow' || p.style[i] === 'stone') && info.corner[i])) ? 'curb' + (this.multi ? '@' + this.themeIdx[p.index][i] : '') : '');
       let prevAg = !!p.ag[p.wrap(-1)] && p.closed;
       for (const run of this.runs(p, edge)) {
-        if (run.key === 'curb') for (const side of [-1, 1]) this.put(this.curbGeo(p, run.ids, side), this.stillMat, { cast: false, far: true, name: 'curbs' });
+        if (run.key.startsWith('curb')) {
+          const cth = this.multi ? this.themes[+run.key.split('@')[1]] : th;
+          for (const side of [-1, 1]) this.put(this.curbGeo(p, run.ids, side, cth), this.stillMat, { cast: false, far: true, name: 'curbs' });
+        }
         if (run.key === 'ag') {
           for (const side of [-1, 1]) this.agRail(p, run.ids, side);
           if (!prevAg) this.agPanel(p, p.s[run.ids[0]]);
@@ -1438,8 +1534,7 @@ class World3D {
   }
 
   // Red-and-white (or theme) clay curbs along a run of the road edge.
-  curbGeo(p, ids, side) {
-    const th = this.theme;
+  curbGeo(p, ids, side, th = this.theme) {
     const ca = new THREE.Color(th.curb[0]), cb = new THREE.Color(th.curb[1]);
     const verts = [], cols = [], idx = [];
     const v = {};
@@ -1527,13 +1622,14 @@ class World3D {
   // Which wall a road sample gets: from its road style first, else the world's.
   wallStyle(p, i) {
     const st = p.style[i], theme = this.def.theme;
+    if (p.look[i]) return p.look[i]; // a segment may name its wall look
     if (p.ag[i] || st === 'metal') return 'tech';
     if (st === 'water') return 'channel';
     if (st === 'rainbow') return 'rail';
     if (st === 'stone') return theme === 'lava' ? 'castle' : 'parapet';
     if (st === 'ice') return theme === 'lava' ? 'castle' : 'ice';
     if (st === 'dirt' && (theme === 'alpine' || theme === 'snow')) return 'logs';
-    return { meadow: 'hedge', snow: 'snow', lava: 'castle', alpine: 'snow' }[theme] || 'snow';
+    return THEME_WALLS[this.multi ? this.themeKeys[this.themeIdx[p.index][i]] : theme] || 'snow';
   }
   wallDepth(p, i) {
     return WALL_LOOKS[this.wallStyle(p, i)].depth;
@@ -1544,9 +1640,10 @@ class World3D {
     for (const p of T.paths) {
       for (const side of [-1, 1]) {
         const flags = side > 0 ? p.wallR : p.wallL;
-        const runs = this.runs(p, (i) => flags[i] + ':' + (flags[i] === 1 ? this.wallStyle(p, i) : p.style[i] === 'rainbow' ? 'rainbow' : ''));
+        const runs = this.runs(p, (i) => flags[i] + ':' + (flags[i] === 1 ? this.wallStyle(p, i) : p.style[i] === 'rainbow' ? 'rainbow' : '') + ':' + (this.multi ? this.themeIdx[p.index][i] : 0));
         runs.forEach((run, n) => {
-          const [flag, style] = run.key.split(':');
+          const [flag, style, ti] = run.key.split(':');
+          const th = this.multi ? this.themes[+ti] : this.theme; // this stretch's theme
           if (flag === '1') {
             const look = WALL_LOOKS[style];
             const col = look.col || th.wall;
@@ -1554,7 +1651,7 @@ class World3D {
             else {
               this.put(this.extrude(p, run.ids, side, look.prof, col, style), look.wob ? this.clayMat : this.stillMat, { far: true, name: 'walls' });
               if (style === 'castle') this.crenellate(p, run.ids, side);
-              if (style === 'rail') this.railPosts(p, run.ids, side);
+              if (style === 'rail' || style === 'coaster') this.railPosts(p, run.ids, side, style === 'coaster' ? '#7a4b30' : '#fff3c4');
               if (style === 'tech') this.techTop(p, run.ids, side);
               if (style === 'snow' && this.def.theme === 'alpine' && !p.branch) this.safetyNets(p, run.ids, side);
             }
@@ -1632,11 +1729,11 @@ class World3D {
     }
     this.put(GK.merge(list), this.clayMat, { far: true });
   }
-  railPosts(p, ids, side) {
+  railPosts(p, ids, side, col = '#fff3c4') {
     const list = [];
     for (let r = 0; r < ids.length; r += 4) {
       const i = ids[r];
-      list.push(this.edgePiece(GK.cyl(0.12, 0.14, 1.4, '#fff3c4', { segs: 8, lump: 0.01 }), p, i, side * (p.hw[i] + p.sh[i]), 0.1));
+      list.push(this.edgePiece(GK.cyl(0.12, 0.14, 1.4, col, { segs: 8, lump: 0.01 }), p, i, side * (p.hw[i] + p.sh[i]), 0.1));
     }
     this.put(GK.merge(list), this.stillMat);
   }
@@ -2019,7 +2116,8 @@ class World3D {
   }
   checkpointArch(p, s, n, name) {
     const palette = [['#58b4ff', '#ffffff'], ['#ffb347', '#ffffff'], ['#7ddc6f', '#ffffff'], ['#c77dff', '#ffffff']][(n - 2) % 4];
-    const tex = this.signTexture('section' + n, 512, 128, palette[0], '#ffffff', [['SECTION ' + n, 46], [String(name || '').toUpperCase(), 34]]);
+    const lap = this.def.lapMode;
+    const tex = this.signTexture((lap ? 'lap' : 'section') + n, 512, 128, palette[0], '#ffffff', [[(lap ? 'LAP ' : 'SECTION ') + n, 46], [String(name || '').toUpperCase(), 34]]);
     this.arch(p, s, { cols: palette, tex, pillar: 5, glow: palette[0] });
   }
   // The end of a point-to-point road: a striped barrier with a snow / hay bank behind it.
@@ -2027,7 +2125,7 @@ class World3D {
     const pt = p.point(s, 0, {});
     const e = pt.hw + pt.sh + 1.5;
     const m = this.frame(p, s);
-    const th = this.theme;
+    const th = this.multi ? this.themeAt(p, p.indexAt(s)) : this.theme;
     const parts = [];
     const bank = this.def.theme === 'alpine' || this.def.theme === 'snow' ? '#ffffff' : this.def.theme === 'lava' ? '#3d2f48' : '#d8b26a';
     for (let z = -e; z <= e + 0.01; z += 2.2) {
@@ -2071,16 +2169,32 @@ class World3D {
       this.scene.add(m);
       this.keep(geo);
     } else {
-      // a sea of clay clouds far below
+      // a sea of clay clouds far below (tinted by the nearest lap, and spread wide over a long course)
       const rnd = U.rng(42);
       const parts = [];
       const y0 = this.voidY + 6;
       GK.detail = 0.7;
-      for (let k = 0; k < 110; k++) {
-        const a = rnd() * TAU, r = Math.sqrt(rnd()) * 480;
+      const reach = this.multi ? Math.max(480, Math.hypot(b.maxX - b.minX, b.maxZ - b.minZ) / 2 + 160) : 480;
+      const blobs = this.multi ? Math.round(110 * (reach / 480) ** 2) : 110;
+      const mp = this.track.main;
+      const lapNear = (x, z) => {
+        if (!this.multi) return th;
+        let best = Infinity, bi = 0;
+        for (let i = 0; i < mp.n; i += 6) {
+          const d = (mp.x[i] - x) ** 2 + (mp.z[i] - z) ** 2;
+          if (d < best) {
+            best = d;
+            bi = i;
+          }
+        }
+        return this.themes[this.themeIdx[0][bi]];
+      };
+      for (let k = 0; k < blobs; k++) {
+        const a = rnd() * TAU, r = Math.sqrt(rnd()) * reach;
         const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
         const s = 18 + rnd() * 30;
-        parts.push(GK.at(GK.blob(s, s * 0.32, s * 0.8, rnd() < 0.5 ? th.cloud : th.cloudShade, { seed: k, lump: 3, ws: 10, hs: 7 }), x, y0 + rnd() * 6, z));
+        const ct = lapNear(x, z);
+        parts.push(GK.at(GK.blob(s, s * 0.32, s * 0.8, rnd() < 0.5 ? ct.cloud : ct.cloudShade, { seed: k, lump: 3, ws: 10, hs: 7 }), x, y0 + rnd() * 6, z));
       }
       GK.detail = 1;
       const cm = this.keep(Clay3D.material({ vertexColors: true, wobble: 0.8, freq: 0.08, rim: 0.5 }));
@@ -2099,6 +2213,7 @@ class World3D {
   // Decor pieces are built once per theme in a few variants and cloned around the land; forests
   // on a mountain are instanced.
   buildDecor() {
+    if (this.multi) return this.buildLapDecor();
     const th = this.theme, t = this.terrain;
     const rnd = U.rng(this.def.id.charCodeAt(0) * 101);
     const valley = this.valley;
@@ -2122,16 +2237,50 @@ class World3D {
     }
     if (valley) this.buildForests(rnd);
   }
+  // Scenery for a course whose laps have themes of their own: every bit of land near the road
+  // grows its nearest lap's decor (theme.decor, drawn from DECOR_PIECES), as thick as that theme's
+  // decorN (pieces per 1000 square units) says.
+  buildLapDecor() {
+    const t = this.terrain, T = this.track;
+    const rnd = U.rng(this.def.id.charCodeAt(0) * 101);
+    const per = t.cell * t.cell / 1000;
+    for (let j = 1; j < t.nz - 1; j++) {
+      for (let i = 1; i < t.nx - 1; i++) {
+        const k = j * t.nx + i;
+        if (t.K[k] !== 0 || t.E[k] < 3.5) continue;
+        if (t.K[k - 1] || t.K[k + 1] || t.K[k - t.nx] || t.K[k + t.nx]) continue;
+        const gi = t.G[k];
+        if (gi < 0) continue;
+        const r0 = rnd(), r1 = rnd(), r2 = rnd(), r3 = rnd(), r4 = rnd(), r5 = rnd();
+        const ti = this.terrainThemeAt(gi), th = this.themes[ti];
+        if (r0 > (th.decorN === undefined ? 1 : th.decorN) * per) continue;
+        // keep the verge of the road itself clear, thinning the scenery out far from any road
+        if (t.E[k] > 4 && r5 > 1 - Math.min(0.75, (t.E[k] - 4) / 90)) continue;
+        const kind = th.decor[Math.floor(r1 * th.decor.length)];
+        const x = t.x0 + (i + r2 - 0.5) * t.cell, z = t.z0 + (j + r3 - 0.5) * t.cell;
+        const h = this.heightAt(x, z);
+        if (h === null) continue;
+        const g = this.decorVariant(kind, Math.floor(r4 * 3), this.themeKeys[ti]);
+        if (!g) continue;
+        this.stamp(g, x, h, z, rnd() * TAU, 0.8 + rnd() * 0.7, this.clayMat, { name: 'decor' });
+      }
+    }
+  }
+  // The lap (theme index) that the land at a road sample belongs to.
+  terrainThemeAt(gi) {
+    const R = this.terrainR;
+    return R.tW[gi] > 0.5 ? R.tB[gi] : R.tA[gi];
+  }
   nearLake(x, z, pad) {
     for (const l of this.lakes) if (Math.hypot(x - l.x, z - l.z) < l.r + pad) return true;
     return false;
   }
-  decorVariant(kind, v) {
-    const key = 'decor:' + this.def.theme + ':' + kind + ':' + v;
+  decorVariant(kind, v, themeKey = this.def.theme) {
+    const key = 'decor:' + themeKey + ':' + kind + ':' + v;
     if (WORLD_GEO[key] === false) return null;
     if (WORLD_GEO[key]) return WORLD_GEO[key];
     GK.detail = 0.5;
-    const g = this.decorPiece(kind, U.rng(kind.length * 31 + v * 7 + 1), v * 13 + 1);
+    const g = this.decorPiece(kind, U.rng(kind.length * 31 + v * 7 + 1), v * 13 + 1, THEMES[themeKey]);
     GK.detail = 1;
     if (g) g.userData.shared = true;
     WORLD_GEO[key] = g || false;
@@ -2223,8 +2372,8 @@ class World3D {
     }
   }
 
-  decorPiece(kind, rnd, seed) {
-    const th = this.theme;
+  decorPiece(kind, rnd, seed, th = this.theme) {
+    if (DECOR_PIECES[kind]) return DECOR_PIECES[kind].call(this, rnd, seed, th);
     const s = 1;
     const P = [];
     if (kind === 'tree') {
@@ -2631,7 +2780,10 @@ class World3D {
       const info = this.pinfo[p.index];
       let side = 1;
       const every = th === 'lava' ? 26 : 40;
-      for (let s = T.startS + 60; s < (T.p2p ? T.finishS - 20 : p.length - 20); s += every) {
+      // a lap may bring its own lamp post (LAMPS[theme key]): geo, glow colour, glow height and size, spacing
+      const lapKey = (s) => (this.multi ? this.themeKeys[this.themeIdx[p.index][p.indexAt(s)]] : null);
+      const custom = (s) => LAMPS[lapKey(s)];
+      for (let s = T.startS + 60; s < (T.p2p ? T.finishS - 20 : p.length - 20); s += (custom(s) && custom(s).every) || every) {
         side = -side;
         const i = p.indexAt(s);
         if (info.gap[i] || p.ag[i]) continue;
@@ -2646,6 +2798,12 @@ class World3D {
           v = this.gp(p, i, side * (p.hw[i] + p.sh[i] + look.depth + 0.6), 0);
           if (!this.clearOfRoads(v.x, v.z, 0.5)) continue;
           v.y = Math.max(v.y, this.groundAt(v.x, v.z, v.y)) - 0.1;
+        }
+        const own = custom(s);
+        if (own) {
+          this.stamp(worldGeo('lamp:' + lapKey(s), own.geo), v.x, v.y, v.z, 0, 1, this.clayMat, { name: 'lamp' });
+          this.glow(v.x, v.y + own.y, v.z, own.size, own.glow, own.mode === undefined ? 0 : own.mode);
+          continue;
         }
         this.stamp(lamp, v.x, v.y, v.z, 0, 1, this.clayMat, { name: 'lamp' });
         this.glow(v.x, v.y + (th === 'lava' ? 1.5 : 5.35), v.z, th === 'lava' ? 3.2 : 2.6, glowCol, th === 'lava' ? 2 : 0);

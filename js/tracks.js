@@ -1,8 +1,9 @@
 'use strict';
 // The course registry and the course format. Each course lives in its own file in js/courses/
 // (pure data, loaded by the big screen and by the Node tests) and pushes itself onto TRACK_DEFS;
-// its 3D landmark builders live in js/scenery/ (browser only). Courses are listed in load order,
-// which is also their difficulty order.
+// its 3D landmark builders live in js/scenery/ (browser only). Courses are listed in load order
+// (the original four run from easiest to hardest; later ones are appended, and their difficulty
+// pips say how hard they really are).
 //
 // A course is a turtle walk (see track.js) plus everything placed along it.
 //
@@ -23,6 +24,10 @@
 //                       antigrav true = anti-gravity: wheels fold into hover mode and bumping
 //                                karts or bumpers gives a spin boost
 //                       style    road style for this segment
+//                       look     wall look for this segment (a WALL_LOOKS key in world3d.js; default:
+//                                the world's, or the road style's)
+//                       deck     true = the road is carried over the void: the land falls away
+//                                beside it, whatever its walls (rendering only)
 //                       adj      (circuits) this straight may stretch to close the loop
 //   bankBlend         units over which banking eases between segments (default 12)
 //
@@ -31,9 +36,13 @@
 //
 // Point-to-point courses (p2p: true) are one run from the top to the finish, split into sections:
 //   p2p: true, startAt (start line, units from the beginning of the walk, default 40),
-//   runout (road left after the finish line, default 50), sections: [{name, music, seg, t}]
+//   runout (road left after the finish line, default 50), sections: [{name, music, theme, seg, t}]
 //   (the first section starts at the start line; later ones at {seg, t}), planeDrop: true for
 //   the cargo-plane intro.
+//   A section may name its own colour theme (a THEMES key): the land, scenery, sky, fog and light
+//   then change from lap to lap (the course's theme is the first one's). lapMode: true raced as
+//   laps: the HUD, the phones and the results call the sections Lap 1/3, 2/3, 3/3 (each lap is a
+//   different stretch of one continuous road, so a lap gets its own title card and its own song).
 //
 // Placements use {seg, t} = turtle segment index and fraction along it, ds = extra units along,
 // d = units right of the centre line (negative = left). Branch placements use {path, u} =
@@ -49,6 +58,7 @@
 //                glide (a ramp that opens the glider), hump (a mogul of height h),
 //                gap (no ground: a chasm), current (water stream: flow = units/s along the road,
 //                negative = against you), antigrav (same as the segment flag)
+//              boost pads may carry look: 'candy' (peppermint swirls instead of chevrons)
 //   boxes      [{seg, t, d: [offsets]}] item box rows
 //   coins      [{seg, t, d, n, gap, dd, h}] coin lines
 //   keys       [{seg, t, d, h}] the floating key for the course's locked gate
@@ -97,5 +107,36 @@ const THEMES = {
     forest: '#2f6b55', forest2: '#3f8a6a',
     voidKind: 'valley', valley: '#5d8f6e', cloud: '#ffffff', cloudShade: '#cddcef',
     decor: ['pine', 'pine', 'pine', 'pine', 'snowrock', 'snowbush'], ambient: 'snow',
+  },
+
+  // Fable Fair, one theme per lap (see the sections of js/courses/fablefair.js). The extras:
+  // fogNear / fogFar (the haze's reach), hill (how high the land rolls, default 7) and rim (how far
+  // the floating land reaches beyond the road's edge, default 30).
+  // Lap 1: a dusk-lit enchanted forest, emerald moss under violet haze and warm lantern light.
+  fairy: {
+    sky: ['#2b2a63', '#7b5aa0', '#f4a79c'], fog: '#5d4c80', fogNear: 30, fogFar: 300, sun: '#ffe7b0',
+    hemiSky: '#c3b0f0', hemiGround: '#2c5a44', sunLight: '#ffd7a0',
+    road: '#8d7a68', roadLine: '#ffe9b8', curb: ['#e8a93f', '#fff0c4'], shoulder: '#3b8a55',
+    grass: '#3a8c58', grass2: '#2b7048', dirt: '#6b4a38', rock: '#5a5170', wall: '#2e6a47', wallTop: '#4a9a5e',
+    voidKind: 'clouds', cloud: '#d6c6f2', cloudShade: '#8e78b8', hill: 11, rim: 60,
+    decor: ['mosstree', 'mosstree', 'mosstree', 'glowshroom', 'fern', 'stump'], ambient: 'fireflies',
+  },
+  // Lap 2: a bright desert under a hot blue sky: golden sand, sandstone, turquoise tiles.
+  mirage: {
+    sky: ['#2c7fd6', '#8cc6f0', '#ffe2ae'], fog: '#f6dcae', fogNear: 120, fogFar: 640, sun: '#fff6d0',
+    hemiSky: '#fff0d2', hemiGround: '#b7814e', sunLight: '#fff1d0',
+    road: '#e2c392', roadLine: '#fff6e2', curb: ['#2d9cb8', '#fff3d6'], shoulder: '#e8c984',
+    grass: '#ecc87c', grass2: '#dcae62', dirt: '#c8935f', rock: '#b9855a', wall: '#e7c88c', wallTop: '#f7e0aa',
+    voidKind: 'clouds', cloud: '#fff4de', cloudShade: '#efcf9c', hill: 13, rim: 46,
+    decor: ['palm', 'dune', 'dune', 'cactus', 'clayjar', 'sandrock'], ambient: 'dust',
+  },
+  // Lap 3: a night sky of lavender clouds, moonlight and stars.
+  dream: {
+    sky: ['#0d0f3b', '#2f2c80', '#7a55b0'], fog: '#3a3790', fogNear: 60, fogFar: 460, sun: '#fff6d8',
+    hemiSky: '#8f93ff', hemiGround: '#2a1d5e', sunLight: '#bcc8ff',
+    road: '#bdb4f2', roadLine: '#ffffff', curb: ['#ffd166', '#ffffff'], shoulder: '#9488e0',
+    grass: '#8070dc', grass2: '#6458c0', dirt: '#9284d0', rock: '#4c3ca0', wall: '#d2caff', wallTop: '#ffffff',
+    voidKind: 'clouds', cloud: '#ece6ff', cloudShade: '#8a7ad8', hill: 8, rim: 40,
+    decor: ['moonflower', 'cloudpuff', 'cloudpuff', 'starpost', 'crystalspire'], ambient: 'stardust',
   },
 };

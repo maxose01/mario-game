@@ -47,6 +47,28 @@ class RaceView {
     this.sectionIntro = false;
     for (const v of this.views) this.snapCam(v);
     if (this.spectator) this.snapCam(this.spectator);
+    // on a course whose laps have themes of their own every view is dressed for its kart's lap
+    for (const v of this.spectator ? this.views.concat(this.spectator) : this.views) {
+      const lap = this.lapOf(v);
+      v.theme = { from: lap, to: lap, t: 1 };
+    }
+  }
+
+  // The lap (index into world.themes) a view is in: its kart's, or for the spectator the kart it films.
+  lapOf(v) {
+    const race = this.race;
+    const k = v === this.spectator ? this.shotKart || race.order[0] || race.karts[0] : this.kartOf(v);
+    return U.clamp((k.section || 1) - 1, 0, this.world.themes.length - 1);
+  }
+  // Fade a view's look from one lap to the next over about a second as its kart passes the lap line.
+  updateTheme(v, dt) {
+    const want = this.lapOf(v), t = v.theme;
+    if (want !== t.to) {
+      t.from = t.to;
+      t.to = want;
+      t.t = 0;
+    }
+    t.t = Math.min(1, t.t + dt / 0.9);
   }
 
   dispose() {
@@ -101,6 +123,7 @@ class RaceView {
     this.fx.update(dt, this.time, events);
     for (const v of this.views) this.updateCam(v, dt);
     if (this.spectator) this.updateSpectator(this.spectator, dt);
+    if (this.world.multi) for (const v of this.spectator ? this.views.concat(this.spectator) : this.views) this.updateTheme(v, dt);
     for (const [k, b] of this.banners) {
       b.t += dt;
       if (b.t > b.life) this.banners.delete(k);
@@ -109,7 +132,8 @@ class RaceView {
     const secs = race.sections;
     if (race.p2p && secs && secs.length && !this.sectionIntro && race.state === 'race' && race.raceTime > 1.3) {
       this.sectionIntro = true;
-      this.views.forEach((v, vi) => this.banner(vi, 'SECTION 1', '#fff3c4', 2.2, 54, secs[0].name.toUpperCase()));
+      const unit = race.track.def.lapMode ? 'LAP' : 'SECTION';
+      this.views.forEach((v, vi) => this.banner(vi, unit + ' 1', '#fff3c4', 2.2, 54, secs[0].name.toUpperCase()));
     }
   }
 
@@ -318,8 +342,9 @@ class RaceView {
       case 'finalsection': {
         const sec = this.race.sections && this.race.sections[e.a - 1];
         const name = sec && sec.name ? sec.name.toUpperCase() : '';
-        if (e.type === 'finalsection') say('FINAL SECTION!', '#ff8fb1', 2.6, 50, name);
-        else say(`SECTION ${e.a}`, '#fff3c4', 2.4, 54, name);
+        const lapMode = this.race.track.def.lapMode;
+        if (e.type === 'finalsection') say(lapMode ? 'FINAL LAP!' : 'FINAL SECTION!', '#ff8fb1', 2.6, 50, name);
+        else say(`${lapMode ? 'LAP' : 'SECTION'} ${e.a}`, '#fff3c4', 2.4, 54, name);
         if (v) v.flash = 1; // a soft white flash through the checkpoint arch
         break;
       }
@@ -380,6 +405,11 @@ class RaceView {
       v.cam.aspect = r.w / r.h;
       v.cam.far = far;
       v.cam.updateProjectionMatrix();
+      if (this.world.multi) {
+        const t = v.theme;
+        this.world.setLapTheme(t.from, t.to, U.easeInOut(t.t));
+        this.fx.showAmbient(this.world.themes[t.t < 0.5 ? t.from : t.to].ambient);
+      }
       this.world.follow(v.cam);
       this.world.cullFor(v.cam, scenery);
       if (shadows) sky.shadowFollow(v.focus.x, v.focus.y, v.focus.z);
@@ -525,8 +555,9 @@ class RaceView {
   sectionMeter(ctx, x, y, w, k, secs) {
     const race = this.race, T = race.track;
     const N = secs.length, sec = U.clamp(k.section || 1, 1, N);
-    Clay.label(ctx, 'SECTION', x, y + 17, 14, '#ffe27a');
-    Clay.label(ctx, `${sec}/${N}`, x + 74, y + 18, 22);
+    const lapMode = T.def.lapMode;
+    Clay.label(ctx, lapMode ? 'LAP' : 'SECTION', x, y + 17, 14, '#ffe27a');
+    Clay.label(ctx, `${sec}/${N}`, x + (lapMode ? 40 : 74), y + 18, 22);
     const goal = race.goal || T.lapLen || 1;
     const by = y + 34, bw = w;
     const at = (s) => x + U.clamp(s / goal, 0, 1) * bw;
@@ -657,7 +688,7 @@ class RaceView {
     const slide = (1 - U.easeOutBack(U.clamp(since / 0.5, 0, 1))) * 460 + (1 - U.clamp(race.introT / 0.35, 0, 1)) * 460;
     const name = (def.name || '').toUpperCase();
     const secs = race.p2p && race.sections ? race.sections.length : 0;
-    const sub = (secs ? `POINT-TO-POINT · ${secs} SECTIONS` : `${race.laps} LAPS`) + ` · ${race.ccName || 150}cc`;
+    const sub = (secs ? (def.lapMode ? `${secs} LAPS` : `POINT-TO-POINT · ${secs} SECTIONS`) : `${race.laps} LAPS`) + ` · ${race.ccName || 150}cc`;
     ctx.save();
     ctx.translate(-slide, 0);
     ctx.font = `700 46px ${FONT}`;

@@ -110,16 +110,16 @@ const Screens = {
       b.setAttribute('aria-pressed', String(t.id === s.track));
       const secs = courseSections(t);
       const laps = `${s.laps} lap${s.laps > 1 ? 's' : ''}`;
-      b.querySelector('.tkl').textContent = secs ? 'Point-to-point' : laps;
+      b.querySelector('.tkl').textContent = secs ? (t.lapMode ? `${secs} laps` : 'Point-to-point') : laps;
       // sections · secret route · staff time (only the secret-route label gives way if it's tight)
       const routes = Save.data.routes[t.id];
       const staff = t.staff && t.staff[s.cc];
       const tf = b.querySelector('.tf');
       tf.textContent = '';
-      if (secs) tf.appendChild(el('span', '', `${secs} sections`));
+      if (secs && !t.lapMode) tf.appendChild(el('span', '', `${secs} sections`));
       tf.appendChild(el('span', 'sr', routes && Object.keys(routes).length ? '🔑 secret found' : '🔒 secret route'));
       if (staff > 0) tf.appendChild(el('span', '', '⏱ ' + fmtTime(staff)));
-      b.title = `${t.name}: ${secs ? `point-to-point, ${secs} sections` : laps}, difficulty ${t.difficulty || 1} of 4` + (staff > 0 ? `, staff time ${fmtTime(staff)} at ${s.cc}cc` : '');
+      b.title = `${t.name}: ${secs ? (t.lapMode ? `${secs} different laps along one road` : `point-to-point, ${secs} sections`) : laps}, difficulty ${t.difficulty || 1} of 4` + (staff > 0 ? `, staff time ${fmtTime(staff)} at ${s.cc}cc` : '');
     }
     const mark = (id, v) => {
       for (const b of $(id).children) {
@@ -137,7 +137,7 @@ const Screens = {
     const p2p = !!(course && course.p2p);
     for (const b of $('optLaps').children) b.disabled = p2p;
     $('lapsNote').hidden = !p2p;
-    if (p2p) $('lapsNote').textContent = `${course.name} is one run in ${courseSections(course)} sections`;
+    if (p2p) $('lapsNote').textContent = course.lapMode ? `${course.name} has ${courseSections(course)} different laps along one road` : `${course.name} is one run in ${courseSections(course)} sections`;
     // the lobby list: in a party (anyone on a phone) every racer shows whether they are ready,
     // and the strip above the cards counts them up
     const party = Party.list().some((q) => q.kind === 'phone');
@@ -345,13 +345,13 @@ const Screens = {
 
   // ---------- results ----------
   // secs: the number of sections of a point-to-point run (0 on a circuit), which swaps the best
-  // lap for the time taken over each section.
-  renderResults(rows, news, secs = 0) {
+  // lap for the time taken over each section (lapMode: the sections are laps).
+  renderResults(rows, news, secs = 0, lapMode = false) {
     const t = $('resultsTable');
     t.innerHTML = '';
     t.classList.toggle('p2p', secs > 0);
     const head = el('tr');
-    for (const h of ['', 'Racer', 'Time', secs ? 'Sections' : 'Best lap', 'Coins']) head.appendChild(el('th', '', h));
+    for (const h of ['', 'Racer', 'Time', secs ? (lapMode ? 'Laps' : 'Sections') : 'Best lap', 'Coins']) head.appendChild(el('th', '', h));
     t.appendChild(head);
     for (const r of rows) {
       const tr = el('tr', r.slot >= 0 ? 'human' : '');

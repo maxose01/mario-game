@@ -316,7 +316,7 @@ const App = {
     Sound.playSong(this.music);
     Party.sendState();
     const secs = this.race.p2p && this.race.sections ? this.race.sections.length : 0;
-    Party.broadcast({ t: 'go', track: this.race.track.def.name, secs });
+    Party.broadcast({ t: 'go', track: this.race.track.def.name, secs, lapMode: !!this.race.track.def.lapMode });
     $('gl').focus && $('gl').focus();
   },
   // A lone racer with bots off races the staff ghost (Edit Panel: Bots).
@@ -725,10 +725,11 @@ const App = {
     if (health) news.push(health);
     this.lastResults = rows;
     const secs = race.p2p && race.sections ? race.sections.length : 0;
+    const lapMode = !!race.track.def.lapMode;
     this.endRace();
     this.screen = 'results';
     Screens.show('results');
-    Screens.renderResults(rows, news, secs);
+    Screens.renderResults(rows, news, secs, lapMode);
     this.refreshShowroom();
     this.showTouch();
     Sound.tempoMul = 1;

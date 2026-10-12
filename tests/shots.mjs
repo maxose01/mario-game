@@ -11,7 +11,7 @@
 //   --d lateral offset, --speed initial speed, --gas (hold the gas), --wait ms per spot,
 //   --players 1..4 (split screen), --bots 0 to race alone, --w/--h viewport, --perf (draw calls
 //   and triangles per shot), --intro, --title, --lobby, --eval "js" (run in the page after the
-//   race starts), --params '{"shadows":false}' (Edit Panel values), --out dir (default ./shots).
+//   race starts), --eval-after "js" (run at every spot, once the wait is over), --params '{"shadows":false}' (Edit Panel values), --out dir (default ./shots).
 import { createRequire } from 'module';
 import { spawn } from 'child_process';
 import fs from 'fs';
@@ -162,6 +162,12 @@ try {
             p = path.point(path.length * Number(u), lateral);
           } else p = T.main.point(Number(spot), lateral);
           k.setPos(p.x, p.y + 0.05, p.z, p.head);
+          // a teleport counts on a point-to-point run: the kart is on that stretch of the road,
+          // so its section (lap) and everything that follows it (HUD, music, a lap's look) match
+          if (r.p2p && spot !== 'start') {
+            k.totalS = k.lastMainS - T.startS;
+            k.section = T.sectionAt(k.lastMainS);
+          }
           k.vx = Math.cos(p.head) * speed;
           k.vz = Math.sin(p.head) * speed;
           for (const v of App.view.views) App.view.snapCam(v);
@@ -169,6 +175,7 @@ try {
         { spot, lateral, speed },
       );
       await wait(waitMs);
+      if (opt('eval-after', false)) console.log('eval-after:', await page.evaluate(opt('eval-after')));
       await snap(`${track}-${spot.replace(':', '-')}`);
     }
   }

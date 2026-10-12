@@ -186,7 +186,7 @@ function onMessage(m) {
     case 'go':
       P.haveResults = false;
       P.goAt = performance.now();
-      $('hLap').textContent = m.secs ? `Section 1/${m.secs}` : `Lap 1/${P.settings ? P.settings.laps : 3}`;
+      $('hLap').textContent = m.secs ? `${m.lapMode ? 'Lap' : 'Section'} 1/${m.secs}` : `Lap 1/${P.settings ? P.settings.laps : 3}`;
       show('race');
       $('sheet').hidden = true;
       setPaused(false);
@@ -205,8 +205,8 @@ function onMessage(m) {
       break;
     case 'fx':
       if (m.k === 'finallap') banner('FINAL LAP!');
-      if (m.k === 'section') banner(`Section ${m.n}` + (m.name ? '\n' + m.name : ''), 2);
-      if (m.k === 'finalsection') banner('FINAL SECTION!' + (m.name ? '\n' + m.name : ''), 2.2);
+      if (m.k === 'section') banner(`${m.lapMode ? 'Lap' : 'Section'} ${m.n}` + (m.name ? '\n' + m.name : ''), 2);
+      if (m.k === 'finalsection') banner((m.lapMode ? 'FINAL LAP!' : 'FINAL SECTION!') + (m.name ? '\n' + m.name : ''), 2.2);
       if (m.k === 'key') banner('🔑 Find the gate!');
       if (m.k === 'gate') banner('Secret route!');
       break;
@@ -330,7 +330,7 @@ function renderLobby() {
       const head = el('span', 'tt');
       head.append(el('b', '', t.name), difficultyPips(t.difficulty));
       b.appendChild(head);
-      const kind = t.sections ? `Point-to-point · ${t.sections} sections` : `${laps} lap${laps > 1 ? 's' : ''}`;
+      const kind = t.sections ? (t.lapMode ? `${t.sections} laps` : `Point-to-point · ${t.sections} sections`) : `${laps} lap${laps > 1 ? 's' : ''}`;
       const bits = [kind, t.found ? '🔑 secret route found' : '🔒 secret route hidden'];
       if (t.staff) bits.push('⏱ staff ' + t.staff);
       b.appendChild(el('small', '', bits.join(' · ')));
@@ -349,7 +349,7 @@ function renderLobby() {
     const p2p = !!(course && course.sections);
     for (const b of $('sLaps').children) b.disabled = p2p;
     $('lapsNote').hidden = !p2p;
-    if (p2p) $('lapsNote').textContent = `${course.name} is one run from top to bottom in ${course.sections} sections.`;
+    if (p2p) $('lapsNote').textContent = course.lapMode ? `${course.name} has ${course.sections} different laps along one road.` : `${course.name} is one run from top to bottom in ${course.sections} sections.`;
   }
   const pl = $('players');
   pl.innerHTML = '';
@@ -754,7 +754,7 @@ function animateWheel() {
 function renderHud(m) {
   if (P.phase !== 'race') show('race');
   $('hPlace').textContent = ordinal(m.place);
-  $('hLap').textContent = m.secs ? `Section ${m.sec}/${m.secs}` : `Lap ${m.lap}/${m.laps}`;
+  $('hLap').textContent = m.secs ? `${m.lapMode ? 'Lap' : 'Section'} ${m.sec}/${m.secs}` : `Lap ${m.lap}/${m.laps}`;
   $('hCoins').textContent = m.coins;
   $('hKey').hidden = !m.key;
   const box = $('hItem');

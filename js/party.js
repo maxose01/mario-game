@@ -347,7 +347,7 @@ const Party = {
       const staff = t.staff && t.staff[this.settings.cc];
       return {
         id: t.id, name: t.name, found: !!(routes && Object.keys(routes).length), difficulty: t.difficulty || 1,
-        sections: t.p2p ? (t.sections || []).length || 1 : 0, staff: staff > 0 ? fmtTime(staff) : '',
+        sections: t.p2p ? (t.sections || []).length || 1 : 0, lapMode: !!t.lapMode, staff: staff > 0 ? fmtTime(staff) : '',
       };
     });
   },
@@ -364,7 +364,7 @@ const Party = {
       const k = race.karts[p.kartIdx];
       this.link.send(p.pid, {
         t: 'hud', place: k.place, n: race.order ? race.order.length : race.karts.length, lap: Math.max(1, Math.min(race.laps, k.lap)), laps: race.laps,
-        secs, sec: secs ? U.clamp(k.section || 1, 1, secs) : 0,
+        secs, sec: secs ? U.clamp(k.section || 1, 1, secs) : 0, lapMode: !!race.track.def.lapMode,
         item: k.roulette > 0 ? '?' : k.item, itemN: k.itemN, coins: k.coins, key: k.key, finished: k.finished,
         state: race.state, count: race.state === 'countdown' ? Math.ceil(race.count) : 0, wrong: k.wrongT > 1.2, drift: k.driftLevel, boost: k.boostT > 0,
       });
@@ -382,6 +382,7 @@ const Party = {
       const sec = App.race && App.race.sections ? App.race.sections[e.a - 1] : null;
       msg.n = e.a;
       msg.name = sec ? sec.name : '';
+      msg.lapMode = !!(App.race && App.race.track.def.lapMode);
     }
     this.link.send(p.pid, msg);
   },

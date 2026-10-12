@@ -42,7 +42,9 @@ class TrackPath {
     this.wallL = A(Uint8Array); this.wallR = A(Uint8Array); // 1 wall, 0 drop, 2 open (joins another road)
     this.bank = A(Float32Array); // tan(bank angle), + = right side low
     this.ag = A(Uint8Array); // 1 = anti-gravity
+    this.deck = A(Uint8Array); // 1 = carried over the void (the land falls away beside it; rendering only)
     this.style = new Array(n); // road style name per sample (rendering only)
+    this.look = new Array(n); // wall look name per sample ('' = the world's default; rendering only)
     let j = 0;
     for (let i = 0; i < n; i++) {
       const target = i * step;
@@ -60,7 +62,9 @@ class TrackPath {
       this.wallL[i] = c.wallL ? 1 : 0;
       this.wallR[i] = c.wallR ? 1 : 0;
       this.ag[i] = c.ag ? 1 : 0;
+      this.deck[i] = c.deck ? 1 : 0;
       this.style[i] = c.style || 'road';
+      this.look[i] = c.look || '';
       this.s[i] = target;
     }
   }
@@ -168,7 +172,7 @@ function walkTurtle(def, lengths) {
   const marks = [];
   let s = 0;
   const seg0 = def.segments[0] || {};
-  pts.push({ x, z, y, hw, sh, wallL: def.wallL, wallR: def.wallR, bank: segBank(seg0), ag: seg0.antigrav ? 1 : 0, style: seg0.style || def.style || 'road' });
+  pts.push({ x, z, y, hw, sh, wallL: def.wallL, wallR: def.wallR, bank: segBank(seg0), ag: seg0.antigrav ? 1 : 0, style: seg0.style || def.style || 'road', deck: seg0.deck ? 1 : 0, look: seg0.look || def.look || '' });
   def.segments.forEach((seg, k) => {
     const len = seg.s !== undefined ? lengths[k] : seg.rad * ((seg.r || seg.l) * Math.PI) / 180;
     const turn = seg.r ? (seg.r * Math.PI) / 180 : seg.l ? (-seg.l * Math.PI) / 180 : 0;
@@ -179,6 +183,7 @@ function walkTurtle(def, lengths) {
     const wallL = seg.wallL !== undefined ? seg.wallL : def.wallL;
     const wallR = seg.wallR !== undefined ? seg.wallR : def.wallR;
     const bank = segBank(seg), ag = seg.antigrav ? 1 : 0, style = seg.style || def.style || 'road';
+    const deck = seg.deck ? 1 : 0, look = seg.look || def.look || '';
     marks.push({ s, len });
     for (let i = 1; i <= steps; i++) {
       const t = i / steps;
@@ -189,7 +194,7 @@ function walkTurtle(def, lengths) {
       z += Math.sin(hm) * ds;
       h += turn / steps;
       const e = t * t * (3 - 2 * t);
-      pts.push({ x, z, y: y0 + (y1 - y0) * e, hw: hw0 + (hw1 - hw0) * e, sh: sh0 + (sh1 - sh0) * e, wallL, wallR, bank, ag, style });
+      pts.push({ x, z, y: y0 + (y1 - y0) * e, hw: hw0 + (hw1 - hw0) * e, sh: sh0 + (sh1 - sh0) * e, wallL, wallR, bank, ag, style, deck, look });
     }
     s += len;
     y = y1;
@@ -266,6 +271,8 @@ function catmull(ctrl, perSeg) {
       o.wallR = c.wallR;
       o.ag = c.ag;
       o.style = c.style;
+      o.deck = c.deck;
+      o.look = c.look;
       out.push(o);
     }
   }
@@ -309,6 +316,7 @@ class Track {
       ? (def.sections || [{ name: def.name }]).map((sec, i) => ({
           name: sec.name || `Section ${i + 1}`,
           music: sec.music || def.music,
+          theme: sec.theme || def.theme,
           s: i === 0 ? this.startS : this.segS(sec.seg, sec.t || 0) + (sec.ds || 0),
         }))
       : [];

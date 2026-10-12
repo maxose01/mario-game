@@ -478,9 +478,9 @@ try {
 
   // ---- the point-to-point mountain run ----
   const cards = await host.evaluate(() => [...document.querySelectorAll('#trackPick .track-b')].map((b) => ({ id: b.dataset.track, pips: b.querySelectorAll('.pips b.on').length, text: b.textContent })));
-  check('lobby lists all four courses', cards.map((c) => c.id).join() === 'meadow,sherbet,magma,mount', cards.map((c) => c.id).join());
-  check('course cards show difficulty, and laps or sections', cards.map((c) => c.pips).join() === '1,2,3,4' && /\d laps?/.test(cards[0].text) && /Point-to-point/.test(cards[3].text) && /3 sections/.test(cards[3].text), cards.map((c) => c.text).join(' | '));
-  check('leader phone lists all four courses', (await ana.locator('#tracks button').count()) === 4);
+  check('lobby lists all five courses', cards.map((c) => c.id).join() === 'meadow,sherbet,magma,mount,fablefair', cards.map((c) => c.id).join());
+  check('course cards show difficulty, and laps or sections', cards.map((c) => c.pips).join() === '1,2,3,4,3' && /\d laps?/.test(cards[0].text) && /Point-to-point/.test(cards[3].text) && /3 sections/.test(cards[3].text) && /3 laps/.test(cards[4].text), cards.map((c) => c.text).join(' | '));
+  check('leader phone lists all five courses', (await ana.locator('#tracks button').count()) === 5);
   await ana.click('#tracks button:has-text("Mount Wobble")');
   await host.waitForFunction(() => Party.settings.track === 'mount', null, { timeout: 5000 });
   await ana.waitForFunction(() => [...document.querySelectorAll('#sLaps button')].every((b) => b.disabled), null, { timeout: 5000 }).catch(() => {});

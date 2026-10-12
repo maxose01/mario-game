@@ -617,11 +617,27 @@ class RaceFX {
     return g;
   }
 
+  // The theme of the lap a kart is in (the world's, on a course with one theme).
+  kartTheme(k) {
+    const w = this.world;
+    return w.multi ? w.themes[U.clamp((k.section || 1) - 1, 0, w.themes.length - 1)] : w.theme;
+  }
+
   // ---------- ambient weather ----------
   // Snow, pollen or embers in a box that wraps around whichever camera is drawing (in the
   // vertex shader), so the weather is everywhere on a big course at no CPU cost.
   buildAmbient() {
-    const kind = this.world.theme.ambient;
+    // one system per kind of weather the laps have; a view shows its lap's (showAmbient)
+    this.ambients = {};
+    for (const th of this.world.multi ? this.world.themes : [this.world.theme]) {
+      if (!this.ambients[th.ambient]) this.ambients[th.ambient] = this.buildAmbientKind(th.ambient);
+    }
+    return this.ambients[this.world.theme.ambient];
+  }
+  showAmbient(kind) {
+    for (const k in this.ambients) this.ambients[k].pts.visible = k === kind;
+  }
+  buildAmbientKind(kind) {
     const L = AMBIENT_LOOKS[kind] || AMBIENT_LOOKS.pollen;
     const n = L.n;
     const pos = new Float32Array(n * 3), seed = new Float32Array(n);
@@ -645,6 +661,7 @@ class RaceFX {
         uScale: { value: 360 },
         uColor: { value: new THREE.Color(L.color) },
         uOpacity: { value: L.opacity },
+        uTwinkle: { value: L.twinkle || 0 },
       }),
       vertexShader: AMBIENT_VERT,
       fragmentShader: AMBIENT_FRAG,
@@ -665,9 +682,11 @@ class RaceFX {
     return { pts, mat, kind, n };
   }
   updateAmbient(time) {
-    const a = this.ambient;
-    a.mat.uniforms.uTime.value = time;
-    a.pts.geometry.setDrawRange(0, Math.round(a.n * U.clamp(CFG.particles, 0, 1)));
+    for (const k in this.ambients) {
+      const a = this.ambients[k];
+      a.mat.uniforms.uTime.value = time;
+      a.pts.geometry.setDrawRange(0, Math.round(a.n * U.clamp(CFG.particles, 0, 1)));
+    }
   }
 
   // ---------- per frame ----------
@@ -753,7 +772,7 @@ class RaceFX {
     // dust off-road
     if (sp > 8 && (k.surface === 'offroad' || k.surface === 'mud') && Math.random() < 0.35 * amt) {
       const [x, y, z] = rear(Math.random() < 0.5 ? -1 : 1);
-      this.clay.spawn(x, y, z, -fx * 2 + (Math.random() - 0.5) * 2, 1.5, -fz * 2 + (Math.random() - 0.5) * 2, 0.35, k.surface === 'mud' ? '#7a4b30' : this.world.theme.shoulder, 0.6, 3, 2, 1);
+      this.clay.spawn(x, y, z, -fx * 2 + (Math.random() - 0.5) * 2, 1.5, -fz * 2 + (Math.random() - 0.5) * 2, 0.35, k.surface === 'mud' ? '#7a4b30' : this.kartTheme(k).shoulder, 0.6, 3, 2, 1);
     }
     const style = loc && loc.path && loc.path.style ? loc.path.style[loc.i] : '';
     // splashes through water streams and shallows
@@ -851,7 +870,7 @@ class RaceFX {
       case 'land':
         if (!k) break;
         if (k.loc && k.loc.path && k.loc.path.style && k.loc.path.style[k.loc.i] === 'water') this.burst(this.glow, k.x, k.y + 0.2, k.z, 18, ['#e4f7ff', '#9fdcff', '#ffffff'], 6, 0.14, 0.7, 14);
-        else this.burst(this.clay, k.x, k.y + 0.2, k.z, 10, [this.world.theme.shoulder, '#e8dde8'], 4, 0.4, 0.6, 4);
+        else this.burst(this.clay, k.x, k.y + 0.2, k.z, 10, [this.kartTheme(k).shoulder, '#e8dde8'], 4, 0.4, 0.6, 4);
         break;
       case 'launch':
         // a puff of snow off a mogul's crest (or a ramp's lip)
@@ -2046,6 +2065,11 @@ const AMBIENT_LOOKS = {
   snow: { n: 1400, box: [110, 56, 110], drift: [0.7, -3.2, 0.35], sway: 1.3, size: 0.3, color: '#ffffff', opacity: 0.92 },
   pollen: { n: 520, box: [100, 40, 100], drift: [0.35, 0.22, 0.2], sway: 1.6, size: 0.2, color: '#fff3b0', opacity: 0.85, add: true },
   embers: { n: 620, box: [100, 50, 100], drift: [0.2, 2.2, 0.1], sway: 0.9, size: 0.22, color: '#ffa54a', opacity: 0.95, add: true },
+  // Fable Fair: fireflies wandering through the forest, sand blown across the desert, stardust
+  // twinkling in the night sky (twinkle: how deeply each speck's light pulses)
+  fireflies: { n: 380, box: [90, 28, 90], drift: [0.12, 0.05, 0.1], sway: 2.6, size: 0.36, color: '#e4ff8a', opacity: 0.95, add: true, twinkle: 0.85 },
+  dust: { n: 640, box: [110, 34, 110], drift: [6.5, 0.25, 1.4], sway: 0.7, size: 0.17, color: '#e9c98c', opacity: 0.6 },
+  stardust: { n: 560, box: [100, 50, 100], drift: [0.06, 0.45, 0.05], sway: 1.3, size: 0.26, color: '#d2d8ff', opacity: 0.95, add: true, twinkle: 1 },
 };
 const AMBIENT_VERT = `
 uniform float uTime;
@@ -2054,6 +2078,7 @@ uniform vec3 uDrift;
 uniform float uSway;
 uniform float uSize;
 uniform float uScale;
+uniform float uTwinkle;
 attribute float aSeed;
 varying float vA;
 varying float vFogDepth;
@@ -2065,6 +2090,7 @@ void main() {
   vec3 rel = mod(p - cameraPosition + 0.5 * uBox, uBox) - 0.5 * uBox;
   vec3 e = abs(rel) / (0.5 * uBox);
   vA = 1.0 - smoothstep(0.7, 1.0, max(max(e.x, e.y), e.z));
+  vA *= 1.0 - uTwinkle * (0.5 + 0.5 * sin(uTime * (1.6 + 2.4 * fract(aSeed * 7.3)) + aSeed * 40.0));
   vec4 mv = viewMatrix * vec4(cameraPosition + rel, 1.0);
   vFogDepth = -mv.z;
   gl_PointSize = uSize * (0.7 + 0.6 * fract(aSeed * 13.7)) * uScale / max(0.6, -mv.z);
