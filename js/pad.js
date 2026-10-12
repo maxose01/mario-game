@@ -330,7 +330,7 @@ function renderLobby() {
       const head = el('span', 'tt');
       head.append(el('b', '', t.name), difficultyPips(t.difficulty));
       b.appendChild(head);
-      const kind = t.sections ? (t.lapMode ? `${t.sections} laps` : `Point-to-point · ${t.sections} sections`) : `${laps} lap${laps > 1 ? 's' : ''}`;
+      const kind = t.sections ? `Point-to-point · ${t.sections} ${t.lapMode ? 'laps' : 'sections'}` : `${laps} lap${laps > 1 ? 's' : ''}`;
       const bits = [kind, t.found ? '🔑 secret route found' : '🔒 secret route hidden'];
       if (t.staff) bits.push('⏱ staff ' + t.staff);
       b.appendChild(el('small', '', bits.join(' · ')));

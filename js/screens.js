@@ -110,16 +110,17 @@ const Screens = {
       b.setAttribute('aria-pressed', String(t.id === s.track));
       const secs = courseSections(t);
       const laps = `${s.laps} lap${s.laps > 1 ? 's' : ''}`;
-      b.querySelector('.tkl').textContent = secs ? (t.lapMode ? `${secs} laps` : 'Point-to-point') : laps;
-      // sections · secret route · staff time (only the secret-route label gives way if it's tight)
+      b.querySelector('.tkl').textContent = secs ? 'Point-to-point' : laps;
+      // sections (or laps, on a run whose sections are laps) · secret route · staff time (only the
+      // secret-route label gives way if it's tight)
       const routes = Save.data.routes[t.id];
       const staff = t.staff && t.staff[s.cc];
       const tf = b.querySelector('.tf');
       tf.textContent = '';
-      if (secs && !t.lapMode) tf.appendChild(el('span', '', `${secs} sections`));
+      if (secs) tf.appendChild(el('span', '', `${secs} ${t.lapMode ? 'laps' : 'sections'}`));
       tf.appendChild(el('span', 'sr', routes && Object.keys(routes).length ? '🔑 secret found' : '🔒 secret route'));
       if (staff > 0) tf.appendChild(el('span', '', '⏱ ' + fmtTime(staff)));
-      b.title = `${t.name}: ${secs ? (t.lapMode ? `${secs} different laps along one road` : `point-to-point, ${secs} sections`) : laps}, difficulty ${t.difficulty || 1} of 4` + (staff > 0 ? `, staff time ${fmtTime(staff)} at ${s.cc}cc` : '');
+      b.title = `${t.name}: ${secs ? `point-to-point, ${t.lapMode ? `${secs} different laps along one road` : `${secs} sections`}` : laps}, difficulty ${t.difficulty || 1} of 4` + (staff > 0 ? `, staff time ${fmtTime(staff)} at ${s.cc}cc` : '');
     }
     const mark = (id, v) => {
       for (const b of $(id).children) {

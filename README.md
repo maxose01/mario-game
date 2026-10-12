@@ -148,12 +148,13 @@ section has its own song: when the human racer furthest down the mountain passes
 music changes on the next beat (no final-lap speed-up here). The race starts with the whole
 field dropping out of a cargo plane on gliders.
 
-**Courses whose laps differ.** Fable Fair is one continuous road split into three laps
-(`lapMode`: the HUD, the phones and the results say Lap 1/3, 2/3 and 3/3, and the results list
-each lap's time). Every lap is its own world: the land, scenery, road surface, walls, lamps, sky,
-fog, light and falling motes change at the lap line (each camera blends over a second, so a
-split screen can show two laps at once), each lap has its own song, and a title card with the
-lap's name comes up as you cross the line.
+**Courses whose laps differ.** Fable Fair is a point-to-point run like Mount Wobble (the lobby
+card says "Point-to-point · 3 laps"): one continuous road from the start to a finish line far
+away, split into three laps (`lapMode`: the HUD, the phones and the results say Lap 1/3, 2/3 and
+3/3, and the results list each lap's time). Every lap is its own world: the land, scenery, road
+surface, walls, lamps, sky, fog, light and falling motes change at the lap line (each camera
+blends over a second, so a split screen can show two laps at once), each lap has its own song,
+and a title card with the lap's name comes up as you cross the line.
 
 **Course features.** Glide ramps unfold a glider that flies the same arc at any speed, so the
 jump suits every engine class; steer it gently through the air. On glowing blue anti-gravity

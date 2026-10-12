@@ -42,7 +42,8 @@
 //   A section may name its own colour theme (a THEMES key): the land, scenery, sky, fog and light
 //   then change from lap to lap (the course's theme is the first one's). lapMode: true raced as
 //   laps: the HUD, the phones and the results call the sections Lap 1/3, 2/3, 3/3 (each lap is a
-//   different stretch of one continuous road, so a lap gets its own title card and its own song).
+//   different stretch of one continuous road, so a lap gets its own title card and its own song);
+//   it is still a point-to-point run, and the lobby cards say "Point-to-point" and "3 laps".
 //
 // Placements use {seg, t} = turtle segment index and fraction along it, ds = extra units along,
 // d = units right of the centre line (negative = left). Branch placements use {path, u} =
